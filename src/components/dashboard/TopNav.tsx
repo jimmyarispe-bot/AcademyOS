@@ -83,6 +83,7 @@ export function TopNav({ fullName, roleLabel, notifications = [], onMenuClick }:
         <button
           type="button"
           onClick={handleSignOut}
+          aria-label="Sign out of AcademyOS"
           className="inline-flex h-10 items-center rounded-xl border border-slate-200 px-3 text-sm font-medium text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50"
         >
           Sign out
