@@ -6,7 +6,7 @@ import { getPrimaryOrganizationId } from "@/lib/enterprise-data/context";
 import { createImportBatch, parseAndStageImport, commitImportBatch } from "@/lib/enterprise-data/import-engine";
 import { getDefaultMappings } from "@/lib/enterprise-data/mapping-engine";
 import { validateImportBatch } from "@/lib/enterprise-data/validation-engine";
-import type { EdpImportType, EdpSourceFormat } from "@/lib/enterprise-data/types";
+import { COMMITTABLE_IMPORT_TYPES, type EdpImportType, type EdpSourceFormat } from "@/lib/enterprise-data/types";
 
 export async function POST(request: Request) {
   const ctx = await getIdentityContext();
@@ -41,6 +41,14 @@ export async function POST(request: Request) {
   await validateImportBatch(supabase, batch.batchId, importType, mappings);
 
   if (body.commit) {
+    if (!COMMITTABLE_IMPORT_TYPES.includes(importType)) {
+      return NextResponse.json(
+        {
+          error: `Import type "${importType}" does not support commit in v1.0. Supported: ${COMMITTABLE_IMPORT_TYPES.join(", ")}`,
+        },
+        { status: 400 }
+      );
+    }
     await commitImportBatch(supabase, batch.batchId, importType);
   }
 

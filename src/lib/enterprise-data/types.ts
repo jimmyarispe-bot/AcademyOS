@@ -82,18 +82,24 @@ export const EDP_NAV = [
   { href: "/dashboard/data/clone", label: "Clone" },
 ] as const;
 
-export const IMPORT_TYPES: Array<{ value: EdpImportType; label: string }> = [
-  { value: "student", label: "Students" },
-  { value: "family", label: "Families" },
-  { value: "employee", label: "Employees" },
-  { value: "course", label: "Courses" },
-  { value: "section", label: "Sections" },
-  { value: "attendance", label: "Attendance" },
-  { value: "financial_transaction", label: "Financial Transactions" },
-  { value: "scholarship", label: "Scholarships" },
-  { value: "state_funding", label: "State Funding" },
-  { value: "quickbooks", label: "QuickBooks" },
-  { value: "historical", label: "Historical Data" },
+/** Import types that commit to domain tables in v1.0 */
+export const COMMITTABLE_IMPORT_TYPES: EdpImportType[] = [
+  "quickbooks",
+  "financial_transaction",
+];
+
+export const IMPORT_TYPES: Array<{ value: EdpImportType; label: string; commitSupported: boolean }> = [
+  { value: "student", label: "Students (validate only)", commitSupported: false },
+  { value: "family", label: "Families (validate only)", commitSupported: false },
+  { value: "employee", label: "Employees (validate only)", commitSupported: false },
+  { value: "course", label: "Courses (validate only)", commitSupported: false },
+  { value: "section", label: "Sections (validate only)", commitSupported: false },
+  { value: "attendance", label: "Attendance (validate only)", commitSupported: false },
+  { value: "financial_transaction", label: "Financial Transactions", commitSupported: true },
+  { value: "scholarship", label: "Scholarships (validate only)", commitSupported: false },
+  { value: "state_funding", label: "State Funding (validate only)", commitSupported: false },
+  { value: "quickbooks", label: "QuickBooks", commitSupported: true },
+  { value: "historical", label: "Historical Data (validate only)", commitSupported: false },
 ];
 
 export const MIGRATION_STEPS: Array<{ key: MigrationStep; label: string }> = [

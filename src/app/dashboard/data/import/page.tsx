@@ -33,6 +33,9 @@ export default async function DataImportPage() {
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5">
         <h2 className="mb-4 font-semibold">Start import</h2>
+        <p className="mb-4 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          v1.0 commit is supported for QuickBooks and Financial Transactions only. Other import types validate and stage records but do not write to domain tables until a future release.
+        </p>
         <form action={runImportAction} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-sm">

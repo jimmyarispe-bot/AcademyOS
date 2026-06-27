@@ -20,7 +20,7 @@ import { startMigrationSession, advanceMigrationStep, rollbackMigration } from "
 import { syncEnterpriseDataPlatform } from "@/lib/enterprise-data/automation";
 import { computeQualitySnapshot } from "@/lib/enterprise-data/quality";
 import { captureWarehouseSnapshots } from "@/lib/enterprise-data/warehouse";
-import type { EdpImportType, EdpSourceFormat, EdpExportFormat, MigrationStep } from "@/lib/enterprise-data/types";
+import { COMMITTABLE_IMPORT_TYPES, type EdpImportType, type EdpSourceFormat, type EdpExportFormat, type MigrationStep } from "@/lib/enterprise-data/types";
 
 async function resolveOrg(formOrgId?: string | null) {
   const ctx = await getIdentityContext();
@@ -57,6 +57,11 @@ export async function runImportAction(formData: FormData): Promise<void> {
   await validateImportBatch(supabase, batch.batchId, importType, mappings);
 
   if (formData.get("commit") === "true") {
+    if (!COMMITTABLE_IMPORT_TYPES.includes(importType)) {
+      throw new Error(
+        `Import type "${importType}" does not support commit in v1.0. Supported: ${COMMITTABLE_IMPORT_TYPES.join(", ")}`
+      );
+    }
     await commitImportBatch(supabase, batch.batchId, importType);
   }
 
