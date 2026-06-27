@@ -2,6 +2,7 @@ import type { createAuthClient } from "@/lib/supabase/server-auth";
 import { fetchLeadFundingCodesByLeadIds } from "@/lib/funding/sync";
 import { renderTemplate, type MergeContext } from "@/lib/admissions/communications/merge-fields";
 import { adjustScheduledForBusinessHours } from "@/lib/platform/automation/business-hours";
+import { sendTransactionalEmail } from "@/lib/platform/email/sendgrid";
 import type {
   CommunicationChannel,
   CommunicationTemplate,
@@ -143,6 +144,24 @@ async function deliverCommunication(
         ? "staff"
         : params.mergeCtx.guardianEmail ?? "";
 
+  let deliveryStatus: string = channel === "email" || channel === "sms" ? "pending" : "sent";
+  let providerMessageId: string | null = null;
+  let deliveryError: string | null = null;
+
+  if (channel === "email" && sentTo) {
+    const emailResult = await sendTransactionalEmail({
+      to: sentTo,
+      subject,
+      body,
+    });
+    deliveryStatus = emailResult.success ? "sent" : "failed";
+    providerMessageId = emailResult.messageId ?? null;
+    deliveryError = emailResult.error ?? null;
+  } else if (channel === "sms") {
+    deliveryStatus = "logged";
+    deliveryError = "SMS provider not configured for v1.0";
+  }
+
   const { data: comm, error } = await supabase
     .from("admissions_communications")
     .insert({
@@ -156,7 +175,7 @@ async function deliverCommunication(
       template_id: params.template.id,
       template_key: params.template.template_key,
       trigger_event: params.template.trigger_event,
-      delivery_status: channel === "email" || channel === "sms" ? "logged" : "sent",
+      delivery_status: deliveryStatus,
       open_status: "unknown",
       recipient_phone: channel === "sms" ? sentTo : null,
       is_staff_notification: isStaff,
@@ -165,7 +184,7 @@ async function deliverCommunication(
     .single();
 
   if (error) {
-    console.error("[communications] deliver:", error.message);
+    console.error("[communications] deliver:", error.message, deliveryError ?? "");
     return null;
   }
 

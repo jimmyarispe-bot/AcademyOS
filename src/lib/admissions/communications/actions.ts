@@ -8,6 +8,7 @@ import {
 } from "@/lib/admissions/communications/engine";
 import type { CommunicationTriggerEvent } from "@/lib/admissions/communications/types";
 import { renderTemplate, type MergeContext } from "@/lib/admissions/communications/merge-fields";
+import { sendTransactionalEmail } from "@/lib/platform/email/sendgrid";
 
 export async function runCommunicationQueueProcessor() {
   const supabase = await createAuthClient();
@@ -59,18 +60,32 @@ export async function resendCommunication(formData: FormData) {
 
   if (!original) return { error: "Communication not found" };
 
+  const subject = customSubject ?? original.subject;
+  const body = customBody ?? original.body;
+  let deliveryStatus = "sent";
+  if (original.communication_type === "email" && original.sent_to) {
+    const emailResult = await sendTransactionalEmail({
+      to: original.sent_to,
+      subject,
+      body,
+    });
+    deliveryStatus = emailResult.success ? "sent" : "failed";
+  } else if (original.communication_type === "sms") {
+    deliveryStatus = "failed";
+  }
+
   const { error } = await supabase.from("admissions_communications").insert({
     lead_id: leadId,
     application_id: original.application_id,
     communication_type: original.communication_type,
-    subject: customSubject ?? original.subject,
-    body: customBody ?? original.body,
+    subject,
+    body,
     sent_to: original.sent_to,
     sent_by: user?.id ?? null,
     template_id: original.template_id,
     template_key: original.template_key,
     trigger_event: original.trigger_event,
-    delivery_status: "logged",
+    delivery_status: deliveryStatus,
     open_status: "unknown",
     metadata: { resent_from: communicationId },
   });
@@ -94,6 +109,14 @@ export async function sendManualCommunication(formData: FormData) {
   const body = formData.get("body") as string;
   const sentTo = formData.get("sent_to") as string;
 
+  let deliveryStatus = channel === "portal_notification" ? "sent" : "pending";
+  if (channel === "email" && sentTo) {
+    const emailResult = await sendTransactionalEmail({ to: sentTo, subject, body });
+    deliveryStatus = emailResult.success ? "sent" : "failed";
+  } else if (channel === "sms") {
+    deliveryStatus = "failed";
+  }
+
   const { error } = await supabase.from("admissions_communications").insert({
     lead_id: leadId,
     application_id: applicationId,
@@ -102,7 +125,7 @@ export async function sendManualCommunication(formData: FormData) {
     body,
     sent_to: sentTo,
     sent_by: user?.id ?? null,
-    delivery_status: "logged",
+    delivery_status: deliveryStatus,
     open_status: "unknown",
     trigger_event: "manual",
   });

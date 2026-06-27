@@ -19,6 +19,7 @@ import {
   scheduleInterviewReminders,
 } from "@/lib/admissions/communications/triggers";
 import { generateEnrollmentPacket } from "@/lib/admissions/enrollment-packets";
+import { sendTransactionalEmail } from "@/lib/platform/email/sendgrid";
 
 type AuthClient = Awaited<ReturnType<typeof createAuthClient>>;
 
@@ -136,18 +137,30 @@ export async function executeWorkflowAction(
             : actionType === "send_sms"
               ? "sms"
               : "portal_notification";
+        const subject = (config.subject as string) ?? "Message from Admissions";
+        const body = (config.body as string) ?? "";
+        const sentTo =
+          channel === "sms"
+            ? (ctx.mergeContext.guardianPhone ?? "")
+            : (ctx.mergeContext.guardianEmail ?? "");
+
+        let deliveryStatus = channel === "portal_notification" ? "sent" : "pending";
+        if (channel === "email" && sentTo) {
+          const emailResult = await sendTransactionalEmail({ to: sentTo, subject, body });
+          deliveryStatus = emailResult.success ? "sent" : "failed";
+        } else if (channel === "sms") {
+          deliveryStatus = "failed";
+        }
+
         await supabase.from("admissions_communications").insert({
           lead_id: ctx.leadId,
           application_id: ctx.applicationId,
           communication_type: channel,
-          subject: (config.subject as string) ?? "Message from Admissions",
-          body: (config.body as string) ?? "",
-          sent_to:
-            channel === "sms"
-              ? (ctx.mergeContext.guardianPhone ?? "")
-              : (ctx.mergeContext.guardianEmail ?? ""),
+          subject,
+          body,
+          sent_to: sentTo,
           sent_by: sentBy,
-          delivery_status: "logged",
+          delivery_status: deliveryStatus,
           open_status: "unknown",
           trigger_event: "manual",
         });
@@ -304,7 +317,13 @@ export async function executeWorkflowAction(
       case "create_calendar_event":
       case "create_financial_account":
       case "create_scholarship_record":
-      case "create_state_funding_record":
+      case "create_state_funding_record": {
+        return {
+          success: false,
+          error: `${ACTION_TYPE_LABELS[actionType]} is not implemented in v1.0`,
+        };
+      }
+
       case "check_missing_documents":
       case "state_funding_check": {
         await writeAuditLog(supabase, {
