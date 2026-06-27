@@ -4,24 +4,33 @@ import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-export default function LoginForm() {
+export default function ResetRequiredForm() {
   const supabase = createClient();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next") ?? "/dashboard";
 
-  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setMessage("");
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
+    if (password.length < 12) {
+      setMessage("Password must be at least 12 characters.");
+      return;
+    }
+    if (password !== confirm) {
+      setMessage("Passwords do not match.");
+      return;
+    }
+
+    setLoading(true);
+    const { error } = await supabase.auth.updateUser({
       password,
+      data: { must_reset_password: false },
     });
 
     if (error) {
@@ -30,67 +39,54 @@ export default function LoginForm() {
       return;
     }
 
-    const mustReset = data.user?.user_metadata?.must_reset_password === true;
-    if (mustReset) {
-      window.location.href = `/login/reset-required?next=${encodeURIComponent(nextPath)}`;
-      return;
-    }
-
     window.location.href = nextPath.startsWith("/") ? nextPath : "/dashboard";
-    setLoading(false);
   };
 
   return (
     <main className="mx-auto mt-24 max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-      <h1 className="text-2xl font-bold text-slate-900">AcademyOS Sign In</h1>
+      <h1 className="text-2xl font-bold text-slate-900">Change your password</h1>
       <p className="mt-1 text-sm text-slate-500">
-        Staff dashboard and parent application portal
+        Your account requires a new password before continuing.
       </p>
 
-      <form onSubmit={handleLogin} className="mt-6 space-y-4" aria-label="Sign in form">
+      <form onSubmit={handleSubmit} className="mt-6 space-y-4" aria-label="Password reset form">
         <div>
-          <label htmlFor="login-email" className="block text-sm font-medium text-slate-700">
-            Email address
+          <label htmlFor="new-password" className="block text-sm font-medium text-slate-700">
+            New password
           </label>
           <input
-            id="login-email"
-            name="email"
-            type="email"
-            autoComplete="username"
-            required
-            placeholder="you@school.org"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-            aria-required="true"
-          />
-        </div>
-
-        <div>
-          <label htmlFor="login-password" className="block text-sm font-medium text-slate-700">
-            Password
-          </label>
-          <input
-            id="login-password"
-            name="password"
+            id="new-password"
             type="password"
-            autoComplete="current-password"
+            autoComplete="new-password"
             required
-            placeholder="Enter your password"
+            minLength={12}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-            aria-required="true"
           />
         </div>
-
+        <div>
+          <label htmlFor="confirm-password" className="block text-sm font-medium text-slate-700">
+            Confirm password
+          </label>
+          <input
+            id="confirm-password"
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={12}
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+          />
+        </div>
         <button
           type="submit"
           disabled={loading}
-          aria-label={loading ? "Signing in" : "Sign in to AcademyOS"}
+          aria-label="Save new password"
           className="w-full rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
         >
-          {loading ? "Signing in..." : "Sign in"}
+          {loading ? "Saving..." : "Save and continue"}
         </button>
       </form>
 

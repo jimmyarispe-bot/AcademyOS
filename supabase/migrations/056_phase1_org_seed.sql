@@ -87,7 +87,7 @@ begin
         now(),
         now(),
         '{"provider":"email","providers":["email"]}'::jsonb,
-        jsonb_build_object('full_name', seed.full_name),
+        jsonb_build_object('full_name', seed.full_name, 'must_reset_password', true),
         now(),
         now(),
         '',
