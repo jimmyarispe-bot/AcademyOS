@@ -13,33 +13,30 @@ export async function runWorkflowTests(supabase: AuthClient, certRunId: string) 
 
   for (const wf of E2E_WORKFLOWS) {
     const start = Date.now();
-    let status: "pass" | "warning" | "failure" = "pass";
-    let message = "Workflow chain validated";
+    let status: "pass" | "warning" | "failure" = "warning";
+    let message = "Table accessibility probe only — not a behavioral E2E test";
     const errors: string[] = [];
-    const evidence: Record<string, unknown> = { modules: wf.modules };
-    let lastSuccessAt: string | null = new Date().toISOString();
+    const evidence: Record<string, unknown> = {
+      modules: wf.modules,
+      probeType: "table_select_head",
+      behavioralE2e: false,
+    };
+    let lastSuccessAt: string | null = null;
 
     if (wf.table) {
       const ok = await tableAccessible(supabase, wf.table);
-      if (!ok) {
+      if (ok) {
         status = "warning";
-        message = `Module table ${wf.table} requires verification`;
-        errors.push(`Table access check: ${wf.table}`);
-        lastSuccessAt = null;
+        message = `Table ${wf.table} reachable — behavioral workflow not verified`;
+        lastSuccessAt = new Date().toISOString();
+      } else {
+        status = "failure";
+        message = `Table ${wf.table} inaccessible or missing RLS grant`;
+        errors.push(`Table access check failed: ${wf.table}`);
       }
-    }
-
-    const { data: prior } = await supabase
-      .from("cert_workflow_tests")
-      .select("last_success_at")
-      .eq("workflow_key", wf.key)
-      .eq("status", "pass")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (status === "pass" && prior?.last_success_at) {
-      evidence.priorSuccess = prior.last_success_at;
+    } else {
+      status = "warning";
+      errors.push("No table defined for workflow probe");
     }
 
     const executionTimeMs = Date.now() - start;
@@ -69,4 +66,17 @@ export async function getLatestWorkflowTests(supabase: AuthClient, certRunId?: s
   if (!run) return [];
   const { data } = await supabase.from("cert_workflow_tests").select("*").eq("cert_run_id", run.id).order("workflow_name");
   return data ?? [];
+}
+
+export function computeWorkflowTestScore(
+  results: Array<{ status: string }>
+): number {
+  if (!results.length) return 0;
+  let score = 0;
+  for (const r of results) {
+    if (r.status === "pass") score += 100;
+    else if (r.status === "warning") score += 55;
+    else score += 0;
+  }
+  return Math.round(score / results.length);
 }

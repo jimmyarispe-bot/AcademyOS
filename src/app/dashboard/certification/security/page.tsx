@@ -1,13 +1,13 @@
 import { createAuthClient } from "@/lib/supabase/server-auth";
 import { requirePagePermission } from "@/lib/platform/identity/page-guard";
-import { getLatestSecurityChecks } from "@/lib/certification/security-engine";
+import { getLatestSecuritySummary } from "@/lib/certification/security-engine";
 import { CertShell } from "@/components/certification/CertNav";
 import { CertTable } from "@/components/certification/CertPanels";
 
 export default async function CertificationSecurityPage() {
   await requirePagePermission(["certification.view", "certification.admin"]);
   const supabase = await createAuthClient();
-  const { score, checks, criticalFindings, recommendations } = await getLatestSecurityChecks(supabase);
+  const { score, checks, criticalFindings, recommendations } = await getLatestSecuritySummary(supabase);
 
   return (
     <CertShell title="Security Certification" subtitle="RLS, FERPA, tenant isolation, audit, MFA, secrets, webhooks, and API keys">

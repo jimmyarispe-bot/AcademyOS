@@ -1,7 +1,7 @@
 import type { createAuthClient } from "@/lib/supabase/server-auth";
 import { createMissionControlItem } from "@/lib/platform/automation/mission-control";
 import { getPrimaryOrganizationId } from "@/lib/certification/context";
-import { runWorkflowTests } from "@/lib/certification/testing-engine";
+import { runWorkflowTests, computeWorkflowTestScore } from "@/lib/certification/testing-engine";
 import { runSecurityCertification } from "@/lib/certification/security-engine";
 import { runPerformanceCertification } from "@/lib/certification/performance-engine";
 import { runAccessibilityCertification, runMobileCertification } from "@/lib/certification/accessibility-engine";
@@ -52,9 +52,9 @@ export async function runFullCertification(supabase: AuthClient, triggeredBy?: s
   ]);
 
   const docResult = await regenerateDocumentation(supabase);
-  const passRate = workflows.filter((w) => w.status === "pass").length / Math.max(workflows.length, 1) * 100;
+  const testingScore = computeWorkflowTestScore(workflows);
   const { count: cloudCount } = await supabase.from("cloud_customers").select("id", { count: "exact", head: true });
-  const operationalScore = passRate >= 85 && (cloudCount ?? 0) >= 0 ? 92 : 78;
+  const operationalScore = testingScore >= 85 && security.securityScore >= 85 ? 92 : 78;
 
   const scores = computeOverallReadiness({
     security: security.securityScore,
@@ -62,7 +62,7 @@ export async function runFullCertification(supabase: AuthClient, triggeredBy?: s
     accessibility: accessibility.accessibilityScore,
     mobile: mobile.mobileScore,
     pwa: pwa.pwaScore,
-    testing: passRate,
+    testing: testingScore,
     integration: integration.integrationScore,
     documentation: docResult.regenerated >= 13 ? 96 : 82,
     dr: dr.drScore,
