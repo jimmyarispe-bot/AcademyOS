@@ -1,0 +1,9 @@
+{
+  "name": "AcademyOS Operations Center",
+  "short_name": "Operations",
+  "description": "Enterprise operations and SaaS management platform",
+  "start_url": "/operations",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#4f46e5"
+}

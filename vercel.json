@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/platform/process-queues",
+      "schedule": "0 */6 * * *"
+    }
+  ]
+}

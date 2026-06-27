@@ -1,0 +1,9 @@
+{
+  "name": "AcademyOS Cloud Console",
+  "short_name": "Cloud",
+  "description": "AcademyOS commercial SaaS operations console",
+  "start_url": "/cloud",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#4f46e5"
+}

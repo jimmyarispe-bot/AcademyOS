@@ -1,0 +1,150 @@
+﻿{
+  "migrationsParsed": 129,
+  "migrationRange": "001ΓÇô129",
+  "functions": {
+    "label": "functions",
+    "expected": 56,
+    "actual": 56,
+    "missing": [],
+    "extra": []
+  },
+  "policies": {
+    "label": "policies",
+    "expected": 549,
+    "actual": 558,
+    "missing": [
+      "admissions_applications|admin_full_access",
+      "admissions_applications|guardian_own_prospect_access",
+      "prospect_guardians|prospect_guardians_guardian_select",
+      "prospect_guardians|prospect_guardians_staff_all",
+      "prospects|prospects_guardian_select",
+      "prospects|prospects_staff_all",
+      "storage|admissions_documents_guardian_rw",
+      "storage|admissions_documents_staff_all"
+    ],
+    "extra": [
+      "classes|class_access",
+      "enrollments|enrollments_access_controlled",
+      "roles|roles_read_access",
+      "scholarship_applications_legacy|admin can read scholarship applications",
+      "scholarship_applications_legacy|allow insert scholarship applications",
+      "school_settings|school_settings_read",
+      "school_settings|school_settings_update_ceo_only",
+      "school_settings|school_settings_write_ceo_only",
+      "schools|schools_access_controlled",
+      "student_family_link|user_can_view_own_family_links",
+      "students|students_insert_school_scoped",
+      "students|students_select_school_scoped",
+      "students|students_update_school_scoped",
+      "user_roles|user_roles_read_own_or_ceo",
+      "user_schools|user_schools_manage_ceo_only",
+      "user_schools|user_schools_select",
+      "users|user_self_access"
+    ]
+  },
+  "triggers": {
+    "label": "triggers",
+    "expected": 151,
+    "actual": 151,
+    "missing": [],
+    "extra": []
+  },
+  "views": {
+    "label": "views",
+    "expected": 26,
+    "actual": 26,
+    "missing": [],
+    "extra": []
+  },
+  "permissionTables": {
+    "expected": [
+      "platform_classification_permissions",
+      "platform_permissions",
+      "platform_role_permissions"
+    ],
+    "missing": []
+  },
+  "rpc": {
+    "expectedFunctionCount": 56,
+    "grantedRpcCount": 0,
+    "migrationFunctionsMissingGrant": [
+      "has_role",
+      "is_school_member",
+      "is_assigned_to_school",
+      "can_access_school",
+      "trigger_set_updated_at",
+      "attach_updated_at_trigger",
+      "school_id_for_student",
+      "school_id_for_employee",
+      "school_id_for_course",
+      "school_id_for_course_section",
+      "is_self_employee",
+      "school_id_for_prospect",
+      "school_id_for_admissions_application",
+      "is_guardian_of_prospect",
+      "school_id_for_admission_lead",
+      "is_guardian_of_lead",
+      "school_id_for_family",
+      "apply_sibling_discount",
+      "school_id_for_billing_account",
+      "school_id_for_position",
+      "set_admissions_lead_stage_entered_at",
+      "list_admissions_lead_funding_sources",
+      "replace_admissions_lead_funding_sources",
+      "list_student_funding_sources",
+      "replace_student_funding_sources",
+      "submit_public_admissions_inquiry",
+      "ensure_state_funding_verifications",
+      "seed_admissions_checklist_for_school",
+      "sync_application_checklist",
+      "detect_admission_duplicates",
+      "user_role_ids",
+      "has_permission",
+      "user_can_access_school",
+      "prevent_immutable_role_delete",
+      "is_founder",
+      "is_enterprise_admin",
+      "is_ceo",
+      "can_access_student_record",
+      "can_access_classification",
+      "is_record_locked",
+      "generate_student_number",
+      "sis_student_policy",
+      "sis_classify_student_record",
+      "sis_sync_sped_review_reminders",
+      "ssis_sync_medical_expiry_alert",
+      "scheduling_policy",
+      "current_employee_id",
+      "teacher_can_access_session",
+      "teacher_student_policy",
+      "instruction_student_policy"
+    ],
+    "migrationFunctionsMissingGrantTotal": 56
+  },
+  "enterpriseRoutes": {
+    "count": 199,
+    "unguarded": [
+      {
+        "route": "/dashboard/admissions/leads/new",
+        "issue": "No obvious permission guard in page or parent layout"
+      },
+      {
+        "route": "/dashboard/admissions/leads/[id]",
+        "issue": "No obvious permission guard in page or parent layout"
+      },
+      {
+        "route": "/dashboard/finance/families/[id]",
+        "issue": "No obvious permission guard in page or parent layout"
+      },
+      {
+        "route": "/dashboard",
+        "issue": "No obvious permission guard in page or parent layout"
+      },
+      {
+        "route": "/dashboard/teacher/students/[id]",
+        "issue": "No obvious permission guard in page or parent layout"
+      }
+    ]
+  },
+  "ok": false
+}
