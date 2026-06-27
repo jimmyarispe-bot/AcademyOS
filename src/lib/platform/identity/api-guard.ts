@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { createAuthClient } from "@/lib/supabase/server-auth";
+import { passwordResetRequiredResponse, userMustResetPassword } from "@/lib/auth/must-reset-password";
 import {
   requirePermission,
   unauthorizedResponse,
@@ -17,6 +18,10 @@ export async function guardApiRoute(
   } = await supabase.auth.getUser();
 
   if (!user) return unauthorizedResponse();
+
+  if (userMustResetPassword(user)) {
+    return passwordResetRequiredResponse();
+  }
 
   if (permission) {
     const gate = await requirePermission(supabase, permission);

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { redirectIfPasswordResetRequired } from "@/lib/auth/must-reset-password";
 import { getSessionUser } from "@/lib/auth/session";
 import { createAuthClient } from "@/lib/supabase/server-auth";
 import {
@@ -11,10 +12,17 @@ import { getUnreadNotificationCount } from "@/lib/portal/notifications";
 import { PortalShell } from "@/components/portal/PortalShell";
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
+  const supabase = await createAuthClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/login?next=/portal");
+
+  redirectIfPasswordResetRequired(user, "/portal");
+
   const sessionUser = await getSessionUser();
   if (!sessionUser) redirect("/login?next=/portal");
-
-  const supabase = await createAuthClient();
   const [isParent, isStudent, studentIds, selfId, unread] = await Promise.all([
     canAccessParentPortal(supabase, sessionUser.id),
     canAccessStudentPortal(supabase, sessionUser.id),
