@@ -151,6 +151,7 @@ export async function rotateCredentialAction(formData: FormData): Promise<void> 
     organizationId: orgId,
     vaultKey: formData.get("vault_key")?.toString() ?? "default",
     credentialType: formData.get("credential_type")?.toString() ?? "api_key",
+    secretValue: formData.get("secret_value")?.toString() ?? "",
   });
   revalidatePath("/dashboard/integrations/security");
 }
