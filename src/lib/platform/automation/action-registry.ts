@@ -53,7 +53,10 @@ export async function executeRegisteredAction(
   if (!handler) {
     const meta = PLATFORM_ACTIONS[actionType];
     if (meta?.status === "stub") {
-      return { success: true };
+      return {
+        success: false,
+        error: `Action "${actionType}" is not implemented in v1.0 (${meta.label})`,
+      };
     }
     return { success: false, error: `Unknown action: ${actionType}` };
   }
