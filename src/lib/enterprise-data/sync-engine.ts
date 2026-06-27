@@ -2,6 +2,9 @@ import type { createAuthClient } from "@/lib/supabase/server-auth";
 
 type AuthClient = Awaited<ReturnType<typeof createAuthClient>>;
 
+/** v1.0: Live OAuth sync is not available — only file/CSV import paths are supported. */
+export const V1_SYNC_MODE = "file_import_only" as const;
+
 export async function queueSyncJob(
   supabase: AuthClient,
   input: {
@@ -36,19 +39,23 @@ export async function runSyncJob(supabase: AuthClient, jobId: string) {
     message: "Sync started",
   });
 
+  const skippedMessage =
+    "OAuth/API connector sync is not available in v1.0. Use file import (CSV, QuickBooks export) via Data Platform or Financial Intelligence import.";
+
   await supabase.from("edp_sync_jobs").update({
-    status: "completed",
+    status: "failed",
     records_processed: 0,
     completed_at: new Date().toISOString(),
+    error_message: skippedMessage,
   }).eq("id", jobId);
 
   await supabase.from("edp_sync_logs").insert({
     sync_job_id: jobId,
-    log_level: "info",
-    message: "Sync completed — connector framework ready for live credentials",
+    log_level: "warning",
+    message: skippedMessage,
   });
 
-  return { success: true };
+  return { success: false, skipped: true, message: skippedMessage };
 }
 
 export async function getSyncHistory(supabase: AuthClient, organizationId: string, limit = 20) {

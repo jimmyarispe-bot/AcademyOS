@@ -26,8 +26,9 @@ export default async function IntegrationSecurityPage() {
       </div>
       <p className="text-sm text-slate-600">{audit.tenantIsolation}</p>
       <form action={rotateCredentialAction} className="flex flex-wrap gap-3 rounded-xl border bg-white p-4">
-        <input name="vault_key" placeholder="Vault key" className="rounded-lg border px-3 py-2 text-sm" required />
-        <select name="credential_type" className="rounded-lg border px-3 py-2 text-sm">
+        <input name="vault_key" placeholder="Vault key" aria-label="Vault key" className="rounded-lg border px-3 py-2 text-sm" required />
+        <input name="secret_value" type="password" placeholder="Secret value" aria-label="Credential secret value" className="rounded-lg border px-3 py-2 text-sm" required autoComplete="off" />
+        <select name="credential_type" aria-label="Credential type" className="rounded-lg border px-3 py-2 text-sm">
           <option value="api_key">API Key</option>
           <option value="oauth">OAuth</option>
           <option value="webhook_secret">Webhook Secret</option>
