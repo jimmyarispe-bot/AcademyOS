@@ -176,7 +176,31 @@ export async function convertAcceptedApplicantToStudent(
     return { success: false, error: studentError?.message ?? "Failed to create student" };
   }
 
-  await supabase.from("sis_enrollments").upsert(
+  // The student's enrolment for the year. The people directory, the family
+  // profile and the student profile all read this table, so a student with no
+  // row here is a student who does not appear to be enrolled anywhere.
+  //
+  // Two things were wrong, and both were silent.
+  //
+  // The conflict target is (student_id, school_year_id, PROGRAM). Migration 229
+  // dropped (student_id, school_year_id) so one child can hold several programs
+  // in a year, and naming a constraint that no longer exists makes Postgres
+  // answer 42P10. The result was never checked, so that error was discarded,
+  // the student was created regardless, and this function returned success with
+  // the enrolment row unwritten.
+  //
+  // A missing school year did the same damage from the other end: the row
+  // simply never appeared. Refuse instead. A conversion that cannot say which
+  // year a child is enrolled in has not enrolled them.
+  if (!application.school_year_id) {
+    return {
+      success: false,
+      error:
+        "This application has no school year, so the student cannot be enrolled. Set the school's current year and try again.",
+    };
+  }
+
+  const { error: enrollmentError } = await supabase.from("sis_enrollments").upsert(
     {
       student_id: student.id,
       school_year_id: application.school_year_id,
@@ -184,9 +208,19 @@ export async function convertAcceptedApplicantToStudent(
       enrollment_status: "enrolled",
       enrolled_at: today,
       lead_id: leadId,
+      is_primary: true,
     },
-    { onConflict: "student_id,school_year_id" }
+    { onConflict: "student_id,school_year_id,program" }
   );
+
+  if (enrollmentError) {
+    // Say plainly what this left behind. The student record exists; the
+    // enrolment does not. Reporting success here is what hid this.
+    return {
+      success: false,
+      error: `Student ${studentNumber} was created but could not be enrolled: ${enrollmentError.message}. That record needs attention before this family is billed.`,
+    };
+  }
 
   if (lead.guardian_first_name || lead.guardian_last_name) {
     await supabase.from("guardians").insert({
