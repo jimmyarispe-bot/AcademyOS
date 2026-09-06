@@ -48,6 +48,7 @@ export const FINANCE_TABS = [
   { href: "/dashboard/finance?view=invoices", label: "Invoices", value: "invoices" },
   { href: "/dashboard/finance?view=payments", label: "Payments", value: "payments" },
   { href: "/dashboard/finance/tuition", label: "Tuition", value: "tuition" },
+  { href: "/dashboard/finance/schedules", label: "Payment Schedules", value: "schedules" },
   { href: "/dashboard/finance?view=plans", label: "Tuition Plans", value: "plans" },
   { href: "/dashboard/finance?view=accounts", label: "Billing Accounts", value: "accounts" },
   { href: "/dashboard/finance?view=families", label: "Families", value: "families" },
