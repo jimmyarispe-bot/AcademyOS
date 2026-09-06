@@ -3,6 +3,7 @@ import { processWorkflowQueue } from "@/lib/admissions/automation/queue";
 import { processCommunicationQueue } from "@/lib/admissions/communications/engine";
 import { syncAdmissionsQueueToPlatform } from "@/lib/platform/automation/queue";
 import { syncFailedAutomationsToMissionControl } from "@/lib/platform/automation/mission-control";
+import { processParentReminders } from "@/lib/admissions/automation/parent-reminders";
 import { processSpedReviewReminders } from "@/lib/sis/reminders";
 import { processMedicalDocumentExpiryAlerts } from "@/lib/ssis/medical-alerts";
 import { processDisengagedFamilies } from "@/lib/ssis/engagement";
@@ -69,6 +70,11 @@ export async function processAllPlatformQueues(
   await run([
     { name: "admissions.workflow", run: () => processWorkflowQueue(supabase) },
     { name: "admissions.communication", run: () => processCommunicationQueue(supabase) },
+    // Runs BEFORE the communication queue drains next time, not after: this
+    // job only enqueues, so the messages it writes tonight are delivered on the
+    // same run by processCommunicationQueue above only if it happens to run
+    // later. One night of latency at worst, and never a double send.
+    { name: "admissions.parentReminders", run: () => processParentReminders(supabase) },
     { name: "admissions.syncPlatform", run: () => syncAdmissionsQueueToPlatform(supabase) },
     { name: "automation.missionControl", run: () => syncFailedAutomationsToMissionControl(supabase) },
     { name: "sis.spedReminders", run: () => processSpedReviewReminders(supabase) },
