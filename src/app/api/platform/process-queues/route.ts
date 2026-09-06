@@ -69,7 +69,11 @@ async function authorizeCron(req: Request): Promise<boolean> {
  */
 type InsertOnlyClient = {
   from: (table: string) => {
-    insert: (row: Record<string, unknown>) => PromiseLike<unknown>;
+    // Resolves to { error }, not to unknown: the whole point of this type is
+    // that a refused insert is a VALUE, not a thrown exception.
+    insert: (
+      row: Record<string, unknown>
+    ) => PromiseLike<{ error: { message: string } | null }>;
   };
 };
 
@@ -79,15 +83,26 @@ async function recordRun(
   summary: PlatformQueueRunSummary
 ) {
   try {
-    await supabase.from("platform_job_runs").insert({
+    // The RETURNED error, not just a thrown one. supabase-js does not throw on
+    // an RLS refusal -- it resolves with { error }. A try/catch alone therefore
+    // catches nothing and the row silently never appears: the exact failure
+    // this table was created to expose.
+    const { error } = await supabase.from("platform_job_runs").insert({
       triggered_by: triggeredBy,
       jobs_run: summary.jobsRun,
       failure_count: summary.failures.length,
       duration_ms: summary.durationMs,
       failures: summary.failures,
     });
+    if (error) {
+      console.error("[process-queues] run completed but could not be recorded", {
+        triggeredBy,
+        error: error.message,
+      });
+    }
   } catch (error) {
     console.error("[process-queues] run completed but could not be recorded", {
+      triggeredBy,
       error: error instanceof Error ? error.message : String(error),
     });
   }
@@ -102,7 +117,18 @@ export async function POST(req: Request) {
     if (gate instanceof NextResponse) return gate;
 
     const summary = await processAllPlatformQueues(cookieClient);
-    await recordRun(cookieClient as unknown as InsertOnlyClient, "human", summary);
+    // The jobs run as the human -- that part is deliberate. The LOG ROW does
+    // not: platform_job_runs (289) has a read policy and no insert policy,
+    // because the only writer was meant to be the service role. Writing it with
+    // the cookie client was refused by RLS on every human-triggered run, and
+    // silently, so the table stayed empty and looked like "the cron never
+    // fired". Who ran it is carried by triggered_by, not by whose connection
+    // inserts the row.
+    await recordRun(
+      createServiceRoleClient() as unknown as InsertOnlyClient,
+      "human",
+      summary
+    );
     return NextResponse.json({
       success: true,
       triggeredBy: "human",
