@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   arrangementLabel,
   channelLabel,
+  channelUnknown,
   closesLabel,
   isOffSquare,
   usd,
@@ -39,6 +40,7 @@ function Muted({ children }: { children: ReactNode }) {
 function PlanRowView({ plan }: { plan: PlanRow }) {
   const closes = closesLabel(plan.closes);
   const offSquare = isOffSquare(plan.paymentChannel);
+  const unknown = channelUnknown(plan.paymentChannel);
   const scheduled = plan.billingMode === "scheduled";
 
   return (
@@ -88,12 +90,17 @@ function PlanRowView({ plan }: { plan: PlanRow }) {
       </td>
 
       <td className="px-4 py-3">
-        <p className={offSquare ? "font-medium text-amber-700" : "text-slate-700"}>
+        <p
+          className={
+            offSquare ? "font-medium text-amber-700" : unknown ? "text-slate-400" : "text-slate-700"
+          }
+        >
           {channelLabel(plan.paymentChannel)}
         </p>
         {offSquare ? (
-          <p className="text-xs text-amber-700">Not in the Square export</p>
+          <p className="text-xs text-amber-700">Skip this family when reconciling Square</p>
         ) : null}
+        {unknown ? <p className="text-xs text-slate-400">Nobody has recorded how they pay</p> : null}
       </td>
 
       <td className="px-4 py-3 tabular-nums">
@@ -181,6 +188,17 @@ export function TuitionScheduleTable({ school }: { school: SchoolSchedules }) {
           {school.offSquare} famil{school.offSquare === 1 ? "y pays" : "ies pay"} outside the Square
           recurring export. Reconciling Square against this list will report them as unpaid unless
           you skip them deliberately.
+        </p>
+      ) : null}
+
+      {/* Counted separately and worded separately. An unrecorded channel is a
+          gap to fill, not a family paying an unusual way — saying otherwise
+          about thirty-two families at once is simply false. */}
+      {school.noChannel > 0 ? (
+        <p className="mt-2 rounded-xl bg-slate-50 px-4 py-2 text-sm text-slate-600">
+          {school.noChannel} plan{school.noChannel === 1 ? " has" : "s have"} no payment method
+          recorded. Not necessarily a problem — but until it is written down, nobody can tell a
+          family who pays another way from one who has stopped paying.
         </p>
       ) : null}
 

@@ -20,6 +20,7 @@
 
 import { createAuthClient } from "@/lib/supabase/server-auth";
 import {
+  channelUnknown,
   isOffSquare,
   type BillingMode,
   type InstalmentRow,
@@ -208,6 +209,7 @@ export async function listTuitionSchedules(): Promise<SchedulesView | { error: s
           .reduce((sum, p) => sum + (p.remainingDue ?? 0), 0),
         notClosing: mine.filter((p) => p.closes === false).length,
         offSquare: mine.filter((p) => isOffSquare(p.paymentChannel)).length,
+        noChannel: mine.filter((p) => channelUnknown(p.paymentChannel)).length,
       };
     })
     .sort((a, b) => a.schoolName.localeCompare(b.schoolName));

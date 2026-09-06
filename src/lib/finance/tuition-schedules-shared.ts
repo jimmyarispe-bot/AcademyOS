@@ -78,8 +78,10 @@ export interface SchoolSchedules {
   readonly scheduledOwed: number;
   /** Scheduled plans whose arithmetic does not close. Should always be zero. */
   readonly notClosing: number;
-  /** Plans whose money arrives outside Square, or by no known route. */
+  /** Plans whose money is known to arrive outside Square. */
   readonly offSquare: number;
+  /** Plans where nobody has recorded how the family pays. */
+  readonly noChannel: number;
 }
 
 export interface SchedulesView {
@@ -137,14 +139,31 @@ export function channelLabel(channel: string | null): string {
 }
 
 /**
- * Whether a Square-to-JAG reconciliation would wrongly flag this family.
+ * Whether this family's money is KNOWN to arrive outside Square.
  *
- * These are the families the monthly Square export cannot see. Without this,
- * every reconciliation reports them as unpaid, and an exception list nobody
- * trusts is worse than no list at all.
+ * NULL IS NOT INCLUDED, and the first version of this got that wrong — it
+ * counted every unrecorded channel as off-Square and put "32 families pay
+ * outside the Square recurring export" on the screen for The Academy FL, where
+ * the truth was that nobody had recorded how any of them pay.
+ *
+ * That is the same conflation `channelLabel` exists to prevent, made one
+ * function later. "We know they pay another way" and "we have not established
+ * how they pay" are different facts with different actions: the first is an
+ * exception to skip during reconciliation, the second is a gap to fill.
  */
 export function isOffSquare(channel: string | null): boolean {
-  return channel !== "square_recurring" && channel !== "square_invoice";
+  return channel === "classwallet" || channel === "state_direct" || channel === "other";
+}
+
+/**
+ * Whether nobody has recorded how this family pays.
+ *
+ * Worth counting on its own. A plan with no channel is not a family paying by
+ * an unusual route — it is a family whose route nobody has written down, which
+ * is exactly the state 62 of the 77 loaded plans are in.
+ */
+export function channelUnknown(channel: string | null): boolean {
+  return channel === null || channel === "";
 }
 
 /**
