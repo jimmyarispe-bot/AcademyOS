@@ -21,6 +21,7 @@ import type {
 } from "@/lib/admissions/interest-form/types";
 import { FundingSourceCheckboxes } from "@/components/ui/FundingSourceCheckboxes";
 import { ActionButton, useActionFeedback } from "@/components/experience-system/feedback";
+import { checkEmailAddress } from "@/lib/admissions/email-check";
 import {
   portalInputClass,
   portalLabelClass,
@@ -213,6 +214,26 @@ function QuestionField({
             ? "number"
             : "text";
 
+  const text = typeof value === "string" || typeof value === "number" ? value : "";
+
+  /**
+   * A "did you mean" hint, for email fields only.
+   *
+   * Two addresses reached production through this form that its validation
+   * could not catch, because both were perfectly well-formed and simply
+   * addressed to the wrong place: `yahoo.con`, which bounced every message
+   * since August, and `gmil.com`, which did not bounce at all.
+   *
+   * The hint SUGGESTS. It never blocks and never rewrites what was typed. A
+   * parent on an unusual domain must be able to submit, and refusing a real
+   * address is worse than accepting a typo — a typo can be corrected by anyone
+   * who notices it, but a family told their email is invalid simply leaves.
+   */
+  const emailHint =
+    question.type === "email" && typeof text === "string" && text.trim() !== ""
+      ? checkEmailAddress(text)
+      : null;
+
   return (
     <div>
       {label}
@@ -222,10 +243,29 @@ function QuestionField({
         type={inputType}
         className={portalInputClass}
         placeholder={question.placeholder}
-        value={typeof value === "string" || typeof value === "number" ? value : ""}
+        value={text}
         onChange={(e) => onChange(question.key, e.target.value)}
         required={question.required}
+        aria-describedby={emailHint && emailHint.kind !== "ok" ? `${id}-hint` : undefined}
       />
+      {emailHint && emailHint.kind === "suggest" ? (
+        <p id={`${id}-hint`} className="mt-1 text-sm text-amber-800">
+          Did you mean{" "}
+          <button
+            type="button"
+            className="font-medium underline"
+            onClick={() => onChange(question.key, emailHint.suggestion)}
+          >
+            {emailHint.suggestion}
+          </button>
+          ? You can keep what you typed.
+        </p>
+      ) : null}
+      {emailHint && emailHint.kind === "invalid" ? (
+        <p id={`${id}-hint`} className="mt-1 text-sm text-amber-800">
+          {emailHint.reason}
+        </p>
+      ) : null}
     </div>
   );
 }

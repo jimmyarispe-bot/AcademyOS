@@ -18,6 +18,7 @@ import type {
   InterestSectionDefinition,
 } from "@/lib/admissions/interest-form/types";
 import { INTEREST_FORM_SCHEMA_VERSION } from "@/lib/admissions/interest-form/types";
+import { checkEmailAddress } from "@/lib/admissions/email-check";
 
 export function hashInterestFormDefinition(definition: InterestFormDefinition): string {
   return createHash("sha256")
@@ -197,10 +198,22 @@ export function validateInterestSubmission(input: {
 
     switch (question.type) {
       case "email": {
+        // Trimmed before storing. A trailing space is invisible in every UI
+        // that shows the value back, and it is enough to make a real address
+        // fail every later check and some mail APIs outright.
         const v = String(raw).trim();
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
-          issues.push({ path: question.key, message: "Enter a valid email." });
+        const check = checkEmailAddress(v);
+        if (check.kind === "invalid") {
+          // The specific reason, not "Enter a valid email." A parent who is
+          // told what is wrong fixes it; a parent told only that it is wrong
+          // retypes the same thing.
+          issues.push({ path: question.key, message: check.reason });
         } else {
+          // A "suggest" result is deliberately NOT an issue. The domain looks
+          // like a typo, and it may well be one, but it may also be the
+          // family's real address — and blocking a real family is the more
+          // expensive mistake. The form offers the correction; it does not
+          // insist on it.
           visibleValues[question.key] = v;
         }
         break;

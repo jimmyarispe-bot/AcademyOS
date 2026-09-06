@@ -85,19 +85,38 @@ function collectConflictTargets(): { file: string; columns: string[] }[] {
   return found;
 }
 
+/**
+ * These tests read several thousand files off disk, which is the point — the
+ * bug they guard against was a disagreement between source text and schema, and
+ * nothing else compares those two places.
+ *
+ * That makes them I/O-bound rather than CPU-bound, and their runtime depends
+ * entirely on the machine. The sweep takes ~1.5s on a Linux CI container and
+ * ~3.6s on a Windows workstation in isolation — and under four parallel vitest
+ * workers, with antivirus inspecting every read, it goes past vitest's 5s
+ * default and is reported as a failure.
+ *
+ * That failure is a lie. It blocked a ship on 6 September while the assertion
+ * itself was perfectly satisfied. An explicit, generous timeout is the honest
+ * fix: this test is allowed to be slow, and it is never allowed to be wrong.
+ * The `> 100 files` assertion below is what stops a slow-but-empty walk from
+ * passing quietly.
+ */
+const SWEEP_TIMEOUT_MS = 60_000;
+
 describe("upsert conflict targets", () => {
   it("can see the source tree it is supposed to be checking", () => {
     // If the root resolves wrong, every assertion below passes for the wrong
     // reason. Fail loudly and say where it looked.
     expect(sources().length, `no .ts files found under ${SRC}`).toBeGreaterThan(100);
-  });
+  }, SWEEP_TIMEOUT_MS);
 
   it("finds the upserts, so a rename cannot make this test vacuously pass", () => {
     // An empty result set would make the assertion below trivially true. That
     // is how a guard rots into decoration.
     const targets = collectConflictTargets();
     expect(targets.length, "no onConflict: \"...\" found anywhere in src").toBeGreaterThan(0);
-  });
+  }, SWEEP_TIMEOUT_MS);
 
   it("never targets (student_id, school_year_id) on sis_enrollments", () => {
     // The constraint migration 229 dropped. Naming it is always 42P10.
@@ -107,7 +126,7 @@ describe("upsert conflict targets", () => {
     });
 
     expect(offenders.map((o) => `${o.file}: ${o.columns.join(",")}`)).toEqual([]);
-  });
+  }, SWEEP_TIMEOUT_MS);
 
   it("still has the (student_id, school_year_id, program) constraint in the schema", () => {
     // If someone drops this one too, the conversion breaks again and the test
@@ -122,5 +141,5 @@ describe("upsert conflict targets", () => {
 
     const sql = files.map((f) => readFileSync(join(MIGRATIONS, f), "utf8")).join("\n");
     expect(sql).toMatch(/sis_enrollments_student_year_program_unique/);
-  });
+  }, SWEEP_TIMEOUT_MS);
 });
