@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import Link from "next/link";
+
 import {
   arrangementLabel,
   channelLabel,
@@ -44,6 +46,22 @@ function PlanRowView({ plan }: { plan: PlanRow }) {
       <td className="px-4 py-3">
         <p className="font-medium text-slate-900">{plan.student}</p>
         <p className="text-xs text-slate-500">{arrangementLabel(plan.billingMode)}</p>
+        {/* The two things anybody looking at a row actually wants: the family's
+            document, and the plan behind it. */}
+        <p className="mt-1 flex gap-3 text-xs">
+          <Link
+            href={`/dashboard/finance/schedules/${plan.planId}/document`}
+            className="text-slate-500 underline hover:text-slate-700"
+          >
+            Schedule document
+          </Link>
+          <Link
+            href={`/dashboard/finance/plan/${plan.studentId}`}
+            className="text-slate-500 underline hover:text-slate-700"
+          >
+            Edit plan
+          </Link>
+        </p>
         {plan.sourceDocument && !plan.sourceDocument.startsWith("No document") ? (
           <p className="mt-1 max-w-md truncate text-xs text-slate-400" title={plan.sourceDocument}>
             {plan.sourceDocument}
@@ -216,7 +234,14 @@ export function TuitionScheduleTable({ school }: { school: SchoolSchedules }) {
           <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-amber-900">
             {school.unplanned.map((u) => (
               <li key={u.studentId}>
-                {u.student}
+                {/* Straight to the builder. The whole value of naming these
+                    children is that somebody can act on the name. */}
+                <Link
+                  href={`/dashboard/finance/plan/${u.studentId}`}
+                  className="underline hover:text-amber-950"
+                >
+                  {u.student}
+                </Link>
                 {u.gradeLevel ? (
                   <span className="text-amber-700"> · {u.gradeLevel.replace(/_/g, " ")}</span>
                 ) : null}

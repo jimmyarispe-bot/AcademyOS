@@ -1,9 +1,50 @@
 import { NextResponse } from "next/server";
-import { createAuthClient } from "@/lib/supabase/server-auth";
-import { processAllPlatformQueues } from "@/lib/platform/automation/process-queues";
-import { guardApiRoute } from "@/lib/platform/identity/api-guard";
 
+import { guardApiRoute } from "@/lib/platform/identity/api-guard";
+import {
+  processAllPlatformQueues,
+  type PlatformQueueRunSummary,
+} from "@/lib/platform/automation/process-queues";
 import { authorizeBearerSecret } from "@/lib/security/timing-safe";
+import { createServiceRoleClient } from "@/lib/supabase/server";
+import { createAuthClient } from "@/lib/supabase/server-auth";
+
+/**
+ * The nightly job runner.
+ *
+ * THE BUG THIS FIXES.
+ *
+ * This route authorised the cron with CRON_SECRET and then did all of its work
+ * through a COOKIE-BOUND Supabase client. A cron request carries no cookies, so
+ * that client had no user — and every queue it drains is protected by policies
+ * like `using (can_access_school(...))`, which is false with no session.
+ *
+ * So the nightly run selected zero rows everywhere, found nothing to do, and
+ * answered `{success: true}`. No error, nothing logged, because from the code's
+ * point of view the queues were simply empty. The house pattern: zero rows with
+ * no error is a policy refusal wearing a success costume.
+ *
+ * Everything on this runner was affected — the admissions workflow and
+ * communication queues, tour reminders, medical document expiry alerts,
+ * disengaged-family detection, attendance notifications, SPED review reminders,
+ * finance and instruction reminders, and every nightly sync and snapshot.
+ *
+ * THE FIX, AND ITS LIMIT.
+ *
+ * A machine caller gets the service-role client, which bypasses RLS. That is
+ * correct for a system job — nobody is logged in, and the work is not on any
+ * one person's behalf — and it is also the most dangerous client in the
+ * codebase, so it is granted ONLY on the CRON_SECRET path. A human who triggers
+ * this from Mission Control still runs as themselves, under their own
+ * permissions, exactly as before.
+ *
+ * AND IT NOW SAYS WHAT IT DID.
+ *
+ * The old response could not distinguish "drained every queue" from "found
+ * nothing anywhere", which is why this went unnoticed for months. Each run
+ * records how many jobs ran, how long it took, and which failed — into
+ * platform_job_runs, so the answer survives the request.
+ */
 
 async function authorizeCron(req: Request): Promise<boolean> {
   return authorizeBearerSecret(
@@ -12,16 +53,80 @@ async function authorizeCron(req: Request): Promise<boolean> {
   );
 }
 
-export async function POST(req: Request) {
-  const supabase = await createAuthClient();
+/**
+ * Record the run.
+ *
+ * Deliberately swallowed: the work is already done by the time this is called,
+ * and failing to write the log must not turn a successful night into a 500 that
+ * makes Vercel retry everything. A missing row is a gap in the record; a
+ * re-run is duplicated work against live data.
+ */
+/**
+ * The two clients are differently typed — one carries the generated Database
+ * types, the other does not — and a union of them has no callable `from`. This
+ * asks for the one method it uses and nothing else, which is also an accurate
+ * description of what recording a run requires.
+ */
+type InsertOnlyClient = {
+  from: (table: string) => {
+    insert: (row: Record<string, unknown>) => PromiseLike<unknown>;
+  };
+};
 
-  if (!(await authorizeCron(req))) {
-    const gate = await guardApiRoute(supabase, "mission_control.access");
+async function recordRun(
+  supabase: InsertOnlyClient,
+  triggeredBy: "cron" | "human",
+  summary: PlatformQueueRunSummary
+) {
+  try {
+    await supabase.from("platform_job_runs").insert({
+      triggered_by: triggeredBy,
+      jobs_run: summary.jobsRun,
+      failure_count: summary.failures.length,
+      duration_ms: summary.durationMs,
+      failures: summary.failures,
+    });
+  } catch (error) {
+    console.error("[process-queues] run completed but could not be recorded", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+export async function POST(req: Request) {
+  const isCron = await authorizeCron(req);
+
+  if (!isCron) {
+    const cookieClient = await createAuthClient();
+    const gate = await guardApiRoute(cookieClient, "mission_control.access");
     if (gate instanceof NextResponse) return gate;
+
+    const summary = await processAllPlatformQueues(cookieClient);
+    await recordRun(cookieClient as unknown as InsertOnlyClient, "human", summary);
+    return NextResponse.json({
+      success: true,
+      triggeredBy: "human",
+      processedAt: new Date().toISOString(),
+      ...summary,
+    });
   }
 
-  await processAllPlatformQueues(supabase);
-  return NextResponse.json({ success: true, processedAt: new Date().toISOString() });
+  // Machine caller. No session exists to inherit, so the service role is the
+  // only identity under which these queues are visible at all.
+  const serviceClient = createServiceRoleClient();
+  const summary = await processAllPlatformQueues(serviceClient);
+  await recordRun(serviceClient as unknown as InsertOnlyClient, "cron", summary);
+
+  if (summary.failures.length > 0) {
+    console.error("[process-queues] jobs failed", summary.failures);
+  }
+
+  return NextResponse.json({
+    success: true,
+    triggeredBy: "cron",
+    processedAt: new Date().toISOString(),
+    ...summary,
+  });
 }
 
 export async function GET(req: Request) {

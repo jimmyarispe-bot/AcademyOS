@@ -15,6 +15,22 @@ type AuthClient = Awaited<ReturnType<typeof createAuthClient>>;
 type NamedJob = { name: string; run: () => Promise<unknown> };
 
 /**
+ * What one nightly run actually did.
+ *
+ * Returned rather than discarded, because for months this function reported
+ * success by returning nothing at all. The route it is called from answered
+ * `{success: true}` whether every queue drained or none of them existed, and
+ * there was no way — short of reading the tables by hand — to tell the two
+ * apart. A job runner that cannot say what it did is indistinguishable from one
+ * that does nothing.
+ */
+export interface PlatformQueueRunSummary {
+  readonly jobsRun: number;
+  readonly failures: { readonly name: string; readonly error: string }[];
+  readonly durationMs: number;
+}
+
+/**
  * Run independent jobs concurrently. Failures are collected; callers still receive success
  * after best-effort processing (same jobs as before, higher throughput).
  */
@@ -34,9 +50,23 @@ async function runParallelJobs(jobs: NamedJob[]): Promise<{ name: string; error:
 }
 
 /** Orchestrates all module queue processors — the platform job runner */
-export async function processAllPlatformQueues(supabase: AuthClient) {
+export async function processAllPlatformQueues(
+  supabase: AuthClient
+): Promise<PlatformQueueRunSummary> {
+  const startedAt = Date.now();
+  const failures: { name: string; error: string }[] = [];
+  let jobsRun = 0;
+
+  // Every wave goes through here so the counts and errors survive to the
+  // caller. Failures are still collected rather than thrown — one broken
+  // module must not stop the other thirty from running — but they are no
+  // longer silently dropped on the floor.
+  const run = async (jobs: NamedJob[]) => {
+    jobsRun += jobs.length;
+    failures.push(...(await runParallelJobs(jobs)));
+  };
   // Wave 1 — independent domain processors (no cross-job ordering requirements).
-  await runParallelJobs([
+  await run([
     { name: "admissions.workflow", run: () => processWorkflowQueue(supabase) },
     { name: "admissions.communication", run: () => processCommunicationQueue(supabase) },
     { name: "admissions.syncPlatform", run: () => syncAdmissionsQueueToPlatform(supabase) },
@@ -57,7 +87,7 @@ export async function processAllPlatformQueues(supabase: AuthClient) {
     "@/lib/finance/automation"
   );
 
-  await runParallelJobs([
+  await run([
     {
       name: "instruction.reminders",
       run: async () => {
@@ -75,7 +105,7 @@ export async function processAllPlatformQueues(supabase: AuthClient) {
   ]);
 
   // Wave 3 — independent platform sync jobs.
-  await runParallelJobs([
+  await run([
     {
       name: "hr.compliance",
       run: async () => {
@@ -184,21 +214,30 @@ export async function processAllPlatformQueues(supabase: AuthClient) {
   const { generateExecutiveInsights } = await import("@/lib/executive/insights");
   const { data: schools } = await supabase.from("schools").select("id").limit(20);
   if (schools?.length) {
-    await runParallelJobs(
+    await run(
       schools.map((school) => ({
         name: `executive.insights.${school.id}`,
         run: () => generateExecutiveInsights(supabase, school.id),
       }))
     );
   } else {
-    await generateExecutiveInsights(supabase);
+    // Counted too. A run with no schools still did this work, and a summary
+    // that omits it would understate what happened.
+    await run([
+      { name: "executive.insights", run: () => generateExecutiveInsights(supabase) },
+    ]);
   }
 
   // Wave 5 — org snapshot first (activity event), then school snapshots in parallel.
   const { captureDailyExecutiveSnapshot } = await import("@/lib/platform/kpi-snapshots");
-  await captureDailyExecutiveSnapshot(supabase, { recordActivityEvent: true });
+  await run([
+    {
+      name: "kpi.snapshot.org",
+      run: () => captureDailyExecutiveSnapshot(supabase, { recordActivityEvent: true }),
+    },
+  ]);
   if (schools?.length) {
-    await runParallelJobs(
+    await run(
       schools.map((school) => ({
         name: `kpi.snapshot.${school.id}`,
         run: () =>
@@ -211,7 +250,7 @@ export async function processAllPlatformQueues(supabase: AuthClient) {
   }
 
   // Wave 6 — RC11 production readiness workers (JAG, founder, aging, certs, notifications).
-  await runParallelJobs([
+  await run([
     {
       name: "rc11.productionWorkers",
       run: async () => {
@@ -220,4 +259,6 @@ export async function processAllPlatformQueues(supabase: AuthClient) {
       },
     },
   ]);
+
+  return { jobsRun, failures, durationMs: Date.now() - startedAt };
 }
