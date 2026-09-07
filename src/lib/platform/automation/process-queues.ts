@@ -29,6 +29,14 @@ export interface PlatformQueueRunSummary {
   readonly jobsRun: number;
   readonly failures: { readonly name: string; readonly error: string }[];
   readonly durationMs: number;
+  /**
+   * How long every job took, finished or not. Without this the only jobs with a
+   * time against them are the ones that hit the 12s ceiling, which tells you
+   * nothing about whether they are slow or merely queueing behind thirteen
+   * siblings. Measure first; the guess about which is which has been wrong once
+   * already.
+   */
+  readonly timings: { readonly name: string; readonly ms: number; readonly ok: boolean }[];
 }
 
 /**
@@ -56,6 +64,31 @@ const RUN_BUDGET_MS = 45_000;
 const PER_JOB_TIMEOUT_MS = 12_000;
 
 /**
+ * HOW MANY JOBS MAY RUN AT ONCE, AND WHY THIS IS NOT "ALL OF THEM".
+ *
+ * Wave 3 fired fourteen sync jobs into a single Promise.allSettled. They do not
+ * run on fourteen databases; they run on one, through one connection pool. Past
+ * a handful of concurrent multi-query jobs they stop overlapping usefully and
+ * start queueing behind each other, and a job that needs three seconds of work
+ * spends twelve waiting for a connection and is recorded as "timed out" — which
+ * reads as a slow job and is nothing of the sort.
+ *
+ * Two measurements say this is contention rather than slowness:
+ *   - kpi.snapshot.org runs ALONE in wave 5 and completes comfortably. The four
+ *     per-school snapshots, launched together, all hit the ceiling.
+ *   - On 7 Sept, halving the work inside financialIntelligence.sync did not
+ *     make it pass. It made SIX of its wave-3 neighbours start failing, because
+ *     it now got further through its own queries and held connections longer.
+ *     More efficient, more crowded, worse outcome. That is the signature of a
+ *     resource ceiling, not of slow code.
+ *
+ * So jobs run through a small pool. Wall clock per wave goes up; jobs that
+ * actually finish goes up considerably more.
+ */
+const DEFAULT_CONCURRENCY = 6;
+const HEAVY_SYNC_CONCURRENCY = 3;
+
+/**
  * The underlying work is not cancelled — a promise cannot be. It is abandoned:
  * we stop waiting and record the fact. On serverless the process is frozen
  * after the response anyway, so an abandoned job simply does not finish.
@@ -79,22 +112,54 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-/** Run independent jobs concurrently, each under its own clock. */
-async function runParallelJobs(jobs: NamedJob[]): Promise<{ name: string; error: string }[]> {
-  const settled = await Promise.allSettled(
-    jobs.map((job) => withTimeout(Promise.resolve(job.run()), PER_JOB_TIMEOUT_MS))
-  );
-  const failures: { name: string; error: string }[] = [];
-  settled.forEach((result, index) => {
-    if (result.status === "rejected") {
-      const reason = result.reason;
-      failures.push({
-        name: jobs[index]!.name,
-        error: reason instanceof Error ? reason.message : String(reason),
-      });
+interface JobOutcome {
+  name: string;
+  ms: number;
+  ok: boolean;
+  error?: string;
+}
+
+/**
+ * Run jobs through a pool of at most `concurrency` at a time, each under its own
+ * clock, and time every one of them.
+ *
+ * Workers pull from a shared cursor rather than being handed fixed slices, so a
+ * single slow job delays only itself — the other workers keep taking from the
+ * queue instead of idling behind it.
+ */
+async function runParallelJobs(
+  jobs: NamedJob[],
+  concurrency: number
+): Promise<JobOutcome[]> {
+  const outcomes: JobOutcome[] = new Array(jobs.length);
+  let cursor = 0;
+
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      const index = cursor++;
+      const job = jobs[index];
+      if (!job) return;
+
+      const jobStartedAt = Date.now();
+      try {
+        await withTimeout(Promise.resolve(job.run()), PER_JOB_TIMEOUT_MS);
+        outcomes[index] = { name: job.name, ms: Date.now() - jobStartedAt, ok: true };
+      } catch (err) {
+        outcomes[index] = {
+          name: job.name,
+          ms: Date.now() - jobStartedAt,
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
     }
-  });
-  return failures;
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.max(1, Math.min(concurrency, jobs.length)) }, worker)
+  );
+
+  return outcomes;
 }
 
 /** Orchestrates all module queue processors — the platform job runner */
@@ -103,13 +168,14 @@ export async function processAllPlatformQueues(
 ): Promise<PlatformQueueRunSummary> {
   const startedAt = Date.now();
   const failures: { name: string; error: string }[] = [];
+  const timings: { name: string; ms: number; ok: boolean }[] = [];
   let jobsRun = 0;
 
   // Every wave goes through here so the counts and errors survive to the
   // caller. Failures are still collected rather than thrown — one broken
   // module must not stop the other thirty from running — but they are no
   // longer silently dropped on the floor.
-  const run = async (jobs: NamedJob[]) => {
+  const run = async (jobs: NamedJob[], concurrency: number = DEFAULT_CONCURRENCY) => {
     // Out of budget: record the rest rather than starting work that will be
     // killed halfway through. A named "skipped" is information; a 504 is not.
     const elapsed = Date.now() - startedAt;
@@ -119,12 +185,19 @@ export async function processAllPlatformQueues(
           name: job.name,
           error: `skipped: run budget exhausted at ${elapsed}ms`,
         });
+        timings.push({ name: job.name, ms: 0, ok: false });
       }
       jobsRun += jobs.length;
       return;
     }
     jobsRun += jobs.length;
-    failures.push(...(await runParallelJobs(jobs)));
+
+    for (const outcome of await runParallelJobs(jobs, concurrency)) {
+      timings.push({ name: outcome.name, ms: outcome.ms, ok: outcome.ok });
+      if (!outcome.ok) {
+        failures.push({ name: outcome.name, error: outcome.error ?? "failed" });
+      }
+    }
   };
   // Wave 1 — independent domain processors (no cross-job ordering requirements).
   await run([
@@ -277,7 +350,7 @@ export async function processAllPlatformQueues(
         return processMicrosoft365SyncJobs(supabase);
       },
     },
-  ]);
+  ], HEAVY_SYNC_CONCURRENCY);
 
   // Wave 4 — school insights in parallel (same limit(20) set as before).
   const { generateExecutiveInsights } = await import("@/lib/executive/insights");
@@ -329,5 +402,8 @@ export async function processAllPlatformQueues(
     },
   ]);
 
-  return { jobsRun, failures, durationMs: Date.now() - startedAt };
+  // Slowest first — the top of this list is the whole diagnosis.
+  timings.sort((a, b) => b.ms - a.ms);
+
+  return { jobsRun, failures, timings, durationMs: Date.now() - startedAt };
 }

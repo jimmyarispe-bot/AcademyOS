@@ -168,6 +168,14 @@ export async function POST(req: Request) {
     console.error("[process-queues] jobs failed", summary.failures);
   }
 
+  // Nobody watches a 3am cron run in a browser, so the timings have to reach
+  // the log or they may as well not be measured. Ten slowest is enough to see
+  // where a night went.
+  console.log(
+    "[process-queues] slowest jobs",
+    summary.timings.slice(0, 10).map((t) => `${t.name} ${t.ms}ms${t.ok ? "" : " FAILED"}`)
+  );
+
   return NextResponse.json({
     success: true,
     triggeredBy: "cron",

@@ -26,6 +26,8 @@ interface RunSummary {
   jobsRun?: number;
   durationMs?: number;
   failures?: { name: string; error: string }[];
+  /** Every job's duration, slowest first — successes included. */
+  timings?: { name: string; ms: number; ok: boolean }[];
 }
 
 export function RunQueuesButton() {
@@ -58,6 +60,7 @@ export function RunQueuesButton() {
   }
 
   const failures = result?.failures ?? [];
+  const slowest = (result?.timings ?? []).slice(0, 10);
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4">
@@ -108,6 +111,31 @@ export function RunQueuesButton() {
                 </li>
               ))}
             </ul>
+          )}
+
+          {/* The ten slowest jobs, successes included. A failure list alone only
+              ever shows you jobs that hit the 12s ceiling, which cannot tell you
+              whether a job is slow or is queueing behind its siblings. The job
+              that took 8s and passed is the one about to start failing. */}
+          {slowest.length > 0 && (
+            <details className="rounded-md bg-slate-50 px-3 py-2">
+              <summary className="cursor-pointer text-slate-700">
+                Slowest jobs
+              </summary>
+              <ul className="mt-2 space-y-1">
+                {slowest.map((t) => (
+                  <li key={t.name} className="flex justify-between gap-4 text-slate-700">
+                    <span className={t.ok ? "" : "text-amber-900"}>
+                      {t.name}
+                      {t.ok ? "" : " (failed)"}
+                    </span>
+                    <span className="tabular-nums text-slate-500">
+                      {(t.ms / 1000).toFixed(1)}s
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </details>
           )}
         </div>
       )}
