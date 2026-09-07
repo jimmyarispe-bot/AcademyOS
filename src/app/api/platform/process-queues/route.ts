@@ -108,6 +108,27 @@ async function recordRun(
   }
 }
 
+/**
+ * THE WALL CLOCK, WHICH IS WHY NONE OF THIS EVER RAN.
+ *
+ * A Vercel serverless function defaults to 10 SECONDS on the Hobby plan. This
+ * route runs thirty-odd jobs against live data in a single invocation. It never
+ * finished, so it never reached recordRun, so platform_job_runs stayed empty and
+ * the nightly cron failed silently every night — returning 504 to a caller that
+ * was a scheduler and therefore had nobody to tell.
+ *
+ * That is the real reason the admissions pipeline has never sent an email. The
+ * cookie-client identity bug found on 6 September was real, and was the SECOND
+ * problem, sitting behind a request that was being killed before it mattered.
+ *
+ * 60 is the Hobby ceiling. If runs start hitting it again — the button on
+ * /dashboard/admissions/automation reports the duration, so this is observable —
+ * the answer is not a bigger number. It is to stop running thirty jobs in one
+ * request: give each wave its own invocation, or move to a queue that processes
+ * a bounded batch per call.
+ */
+export const maxDuration = 60;
+
 export async function POST(req: Request) {
   const isCron = await authorizeCron(req);
 
