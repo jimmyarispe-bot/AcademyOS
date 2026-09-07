@@ -201,7 +201,18 @@ export async function syncQuickBooksFinancials(
 
   for (const conn of connections) {
     if (conn.status !== "connected") continue;
-    if (conn.scope !== "school" && conn.scope !== "network") continue;
+    // 'entity' is a real legal entity whose money counts toward the network
+    // but which is not a JAG school -- The Academy NJ LLC, closed 31 Aug 2026.
+    // Excluding it is not a cosmetic omission: NJ was $805,410 of 2025 income
+    // and $458,585 of net income, and leaving it out is the whole reason the
+    // 2025 books read half the filed return.
+    if (
+      conn.scope !== "school" &&
+      conn.scope !== "network" &&
+      conn.scope !== "entity"
+    ) {
+      continue;
+    }
     results.push(await syncOne(organizationId, conn, period, method));
   }
 

@@ -73,7 +73,13 @@ export interface QboConnectionRow {
   organization_id: string;
   realm_id: string;
   company_name: string | null;
-  scope: "school" | "network" | "unassigned";
+  /**
+   * 'entity' is a real legal entity whose financials count toward the network
+   * but which is not a JAG school -- The Academy NJ LLC, closed 31 Aug 2026.
+   * public.schools has no closed state, so a school row would put a shut campus
+   * into every roster and dashboard. See migration 305.
+   */
+  scope: "school" | "network" | "unassigned" | "entity";
   school_id: string | null;
   status: "pending" | "connected" | "disconnected" | "error";
   access_token: string | null;
