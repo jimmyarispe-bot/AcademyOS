@@ -60,10 +60,15 @@ function amountOf(cols: { value?: string }[] | undefined): number | null {
   return null;
 }
 
-function walk(rows: QboReportRow[] | undefined, visit: (row: QboReportRow) => void): void {
+function walk(
+  rows: QboReportRow[] | undefined,
+  visit: (row: QboReportRow, ancestors: string[]) => void,
+  ancestors: string[] = []
+): void {
   for (const row of rows ?? []) {
-    visit(row);
-    walk(row.Rows?.Row, visit);
+    visit(row, ancestors);
+    // A section's own label joins the ancestry of everything beneath it.
+    walk(row.Rows?.Row, visit, row.Rows?.Row ? [...ancestors, label(row)] : ancestors);
   }
 }
 
@@ -95,15 +100,35 @@ export function sectionTotal(report: QboReport, group: string): number | null {
  */
 export function sumMatchingAccounts(
   report: QboReport,
-  patterns: RegExp[]
+  patterns: RegExp[],
+  options: { matchAncestors?: boolean } = {}
 ): number | null {
   let total: number | null = null;
-  walk(report.Rows?.Row, (row) => {
-    // Leaf rows carry ColData directly and have no child Rows.
+  walk(report.Rows?.Row, (row, ancestors) => {
+    // Leaf rows carry ColData directly and have no child Rows. Summing LEAVES
+    // ONLY is what stops a section being counted twice -- once as its own
+    // subtotal and again as its children.
     if (!row.ColData || row.Rows?.Row?.length) return;
     const name = label(row);
     if (!name) return;
-    if (!patterns.some((p) => p.test(name))) return;
+
+    const own = patterns.some((p) => p.test(name));
+    // WHY ANCESTORS MATTER, from The Academy HS's actual books:
+    //
+    //   66000 Payroll Expenses          (section)
+    //     66100 Payroll Wages           (section)
+    //       66150 Independent Contractor Payment   45,561.95   <- the leaf
+    //
+    // The leaf carries no payroll word at all, because HS pays independent
+    // contractors rather than running a W-2 payroll. Matching leaf names alone
+    // reported NULL labour cost for a school whose contractors are 94% of its
+    // spend. A person reading this report would see the account sitting under
+    // "Payroll Expenses" and count it; so does this.
+    const inherited =
+      options.matchAncestors === true &&
+      ancestors.some((a) => patterns.some((p) => p.test(a)));
+
+    if (!own && !inherited) return;
     const amount = amountOf(row.ColData);
     if (amount === null) return;
     total = (total ?? 0) + amount;
@@ -111,13 +136,27 @@ export function sumMatchingAccounts(
   return total;
 }
 
-const PAYROLL = [
+/**
+ * LABOUR COST, not "payroll".
+ *
+ * Two of the four schools run entirely on independent contractors paid by
+ * Zelle, not on a W-2 payroll. For every purpose this figure serves -- cost per
+ * student, margin, EBITDA -- a contractor teaching a class and an employee
+ * teaching a class are the same expense. Calling the concept "payroll" was the
+ * mistake; it named an employment arrangement rather than a cost.
+ */
+const LABOR = [
   /payroll/i,
   /\bwages?\b/i,
   /salar(y|ies)/i,
   /\bcompensation\b/i,
   /employee benefits?/i,
   /payroll tax/i,
+  /independent contractor/i,
+  /contract labou?r/i,
+  /subcontractor/i,
+  /\b1099\b/i,
+  /\bstipends?\b/i,
 ];
 const DEPRECIATION = [/depreciation/i];
 const AMORTIZATION = [/amorti[sz]ation/i];
@@ -130,7 +169,7 @@ export type ParsedProfitAndLoss = {
   totalCogs: number | null;
   totalExpenses: number | null;
   netIncome: number | null;
-  payrollExpense: number | null;
+  laborExpense: number | null;
   depreciation: number | null;
   amortization: number | null;
   interestExpense: number | null;
@@ -144,7 +183,9 @@ export function parseProfitAndLoss(report: QboReport): ParsedProfitAndLoss {
     totalCogs: sectionTotal(report, "COGS"),
     totalExpenses: sectionTotal(report, "Expenses"),
     netIncome: sectionTotal(report, "NetIncome"),
-    payrollExpense: sumMatchingAccounts(report, PAYROLL),
+    // matchAncestors: a sub-account under a Payroll section is labour even
+    // when its own name never says so.
+    laborExpense: sumMatchingAccounts(report, LABOR, { matchAncestors: true }),
     depreciation: sumMatchingAccounts(report, DEPRECIATION),
     amortization: sumMatchingAccounts(report, AMORTIZATION),
     interestExpense: sumMatchingAccounts(report, INTEREST),

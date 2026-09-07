@@ -83,12 +83,76 @@ describe("QuickBooks report parsing", () => {
     expect(parsed.periodEnd).toBe("2026-08-31");
   });
 
-  it("sums payroll across nested sub-accounts", () => {
+  it("sums labour across nested sub-accounts", () => {
     // 236000 + 18400. Summed from the LEAVES, not from the "Total Payroll
     // Expenses" summary -- so a chart of accounts that nests payroll two levels
     // deeper still adds up, and one that has no payroll section at all still
     // finds "Salaries & Wages" wherever it sits.
-    expect(parseProfitAndLoss(PL).payrollExpense).toBe(254400);
+    expect(parseProfitAndLoss(PL).laborExpense).toBe(254400);
+  });
+
+  it("counts a contractor account nested under a payroll section", () => {
+    // The Academy HS's real chart of accounts, 7 September 2026. The leaf
+    // carries NO payroll word -- HS pays independent contractors by Zelle
+    // rather than running a W-2 payroll -- and leaf-name matching alone
+    // reported NULL labour cost for a school whose contractors are 94% of its
+    // total spend. The section above it is what says "payroll".
+    const hs: QboReport = {
+      Rows: {
+        Row: [
+          {
+            type: "Section",
+            group: "Expenses",
+            Rows: {
+              Row: [
+                {
+                  type: "Section",
+                  Header: { ColData: [{ value: "66000 Payroll Expenses" }] },
+                  Rows: {
+                    Row: [
+                      {
+                        type: "Section",
+                        Header: { ColData: [{ value: "66100 Payroll Wages" }] },
+                        Rows: {
+                          Row: [
+                            {
+                              ColData: [
+                                { value: "66150 Independent Contractor Payment" },
+                                { value: "45561.95" },
+                              ],
+                            },
+                          ],
+                        },
+                        Summary: {
+                          ColData: [
+                            { value: "Total 66100 Payroll Wages" },
+                            { value: "45561.95" },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                  Summary: {
+                    ColData: [
+                      { value: "Total 66000 Payroll Expenses" },
+                      { value: "45561.95" },
+                    ],
+                  },
+                },
+                { ColData: [{ value: "Software Subscriptions" }, { value: "3163.10" }] },
+              ],
+            },
+            Summary: { ColData: [{ value: "Total Expenses" }, { value: "48725.05" }] },
+          },
+        ],
+      },
+    };
+
+    // 45561.95 exactly -- ONCE. Two enclosing sections each carry the same
+    // subtotal, so counting summaries as well as leaves would have reported
+    // three times the real figure and looked entirely plausible.
+    expect(parseProfitAndLoss(hs).laborExpense).toBe(45561.95);
+    expect(parseProfitAndLoss(hs).totalExpenses).toBe(48725.05);
   });
 
   it("does not mistake interest income for interest expense", () => {
@@ -140,7 +204,7 @@ describe("QuickBooks report parsing", () => {
       totalIncome: null,
       totalExpenses: null,
       netIncome: null,
-      payrollExpense: null,
+      laborExpense: null,
     });
   });
 });

@@ -126,7 +126,7 @@ async function syncOne(
   const cashBalance = bs.ok ? parseBalanceSheetCash(bs.report) : null;
 
   // Say which figures Intuit's report did not yield. A caller that sees
-  // payrollExpense in this list knows EBITDA cannot be trusted, rather than
+  // laborExpense in this list knows the labour figure is absent, rather than
   // reading a null as a zero.
   const missing = Object.entries({ ...figures, cashBalance })
     .filter(([key, value]) => value === null && !key.startsWith("period"))
@@ -147,7 +147,7 @@ async function syncOne(
         total_cogs: figures.totalCogs,
         total_expenses: figures.totalExpenses,
         net_income: figures.netIncome,
-        payroll_expense: figures.payrollExpense,
+        labor_expense: figures.laborExpense,
         depreciation: figures.depreciation,
         amortization: figures.amortization,
         interest_expense: figures.interestExpense,
