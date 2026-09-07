@@ -4,29 +4,53 @@ import { computeClassProfitability } from "@/lib/financial-intelligence/profitab
 
 type AuthClient = Awaited<ReturnType<typeof createAuthClient>>;
 
-export async function computeBreakEvenAnalysis(supabase: AuthClient, schoolId: string) {
-  const classes = await computeClassProfitability(supabase, schoolId, "monthly");
+/**
+ * @param precomputedClasses class profitability the caller has ALREADY awaited.
+ *   Pass it. Computing it is the single most expensive thing in the financial
+ *   sync, and the nightly job used to run it three times per school with
+ *   identical arguments -- here, and again inside generateFinancialAlerts, on
+ *   top of the caller's own call. Omit it only when you have nothing to hand.
+ */
+export async function computeBreakEvenAnalysis(
+  supabase: AuthClient,
+  schoolId: string,
+  precomputedClasses?: ClassProfitabilityRow[]
+) {
+  const classes =
+    precomputedClasses ?? (await computeClassProfitability(supabase, schoolId, "monthly"));
   const today = new Date().toISOString().split("T")[0];
 
   const underperforming = classes.filter((c) => c.currentEnrollment < c.breakEvenEnrollment);
   const aboveTarget = classes.filter((c) => c.marginPct >= 15);
 
-  for (const cls of classes) {
-    await supabase.from("fi_break_even_snapshots").insert({
-      school_id: schoolId,
-      entity_type: "class",
-      entity_id: cls.courseSectionId,
-      entity_key: cls.sectionCode,
-      minimum_students: cls.breakEvenEnrollment,
-      optimal_students: Math.min(cls.currentEnrollment + cls.availableSeats, cls.breakEvenEnrollment * 1.5),
-      max_profitability_students: cls.currentEnrollment + cls.availableSeats,
-      current_enrollment: cls.currentEnrollment,
-      available_seats: cls.availableSeats,
-      is_underperforming: cls.currentEnrollment < cls.breakEvenEnrollment,
-      is_overstaffed: cls.profitPerHour < 0 && cls.currentEnrollment > 0,
-      snapshot_date: today,
-      metrics: { margin_pct: cls.marginPct, net_margin: cls.netMargin },
-    });
+  // One insert for the whole set, not one round trip per class. With four
+  // schools inside a 12-second budget, a per-row loop over every open section
+  // was a meaningful part of why this job had never once finished.
+  if (classes.length) {
+    const { error } = await supabase.from("fi_break_even_snapshots").insert(
+      classes.map((cls) => ({
+        school_id: schoolId,
+        entity_type: "class",
+        entity_id: cls.courseSectionId,
+        entity_key: cls.sectionCode,
+        minimum_students: cls.breakEvenEnrollment,
+        optimal_students: Math.min(cls.currentEnrollment + cls.availableSeats, cls.breakEvenEnrollment * 1.5),
+        max_profitability_students: cls.currentEnrollment + cls.availableSeats,
+        current_enrollment: cls.currentEnrollment,
+        available_seats: cls.availableSeats,
+        is_underperforming: cls.currentEnrollment < cls.breakEvenEnrollment,
+        is_overstaffed: cls.profitPerHour < 0 && cls.currentEnrollment > 0,
+        snapshot_date: today,
+        metrics: { margin_pct: cls.marginPct, net_margin: cls.netMargin },
+      }))
+    );
+    if (error) {
+      console.error("[computeBreakEvenAnalysis] snapshot insert failed", {
+        schoolId,
+        rows: classes.length,
+        error: error.message,
+      });
+    }
   }
 
   const { data: sections } = await supabase

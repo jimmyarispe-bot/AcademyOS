@@ -41,10 +41,29 @@ export async function getCommandCenterMetrics(
     );
   complianceAlerts = complianceCount ?? 0;
 
-  const { data: paymentsYtd } = await supabase
+  // `payments` has no `payment_date` column -- it is `paid_at` -- and PostgREST
+  // answers a filter on a column that does not exist with an error rather than
+  // rows. The old code discarded that error and reduced null to 0, so the
+  // Command Center has reported cash flow of exactly 0 since it was written.
+  // See the note in financial-intelligence/school-financials.ts; same bug, and
+  // this was the second copy of it.
+  let paymentsQuery = supabase
     .from("payments")
-    .select("amount, payment_date")
-    .gte("payment_date", yearStart);
+    .select("amount, invoices!inner(family_billing_accounts!inner(school_id))")
+    .eq("payment_status", "completed")
+    .gte("paid_at", `${yearStart}T00:00:00Z`);
+
+  if (schoolId) {
+    paymentsQuery = paymentsQuery.eq("invoices.family_billing_accounts.school_id", schoolId);
+  }
+
+  const { data: paymentsYtd, error: paymentsError } = await paymentsQuery;
+  if (paymentsError) {
+    console.error("[getCommandCenterMetrics] cash flow query failed", {
+      schoolId: schoolId ?? "all",
+      error: paymentsError.message,
+    });
+  }
   const cashFlow = (paymentsYtd ?? []).reduce((s, p) => s + Number(p.amount ?? 0), 0);
 
   const interventionEffectiveness =

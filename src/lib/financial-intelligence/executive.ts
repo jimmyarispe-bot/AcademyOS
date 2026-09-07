@@ -26,7 +26,11 @@ export async function getExecutiveFinancialDashboard(
       .eq("is_resolved", false),
   ]);
 
-  await computeBreakEvenAnalysis(supabase, schoolId);
+  // `classes` is already in hand from the fan-out above. Without passing it,
+  // this recomputed the most expensive query in the file a second time -- which
+  // is what made the four per-school KPI snapshots exceed 12 seconds while the
+  // org-wide one, which skips this whole function, completed comfortably.
+  await computeBreakEvenAnalysis(supabase, schoolId, classes);
 
   const sortedPrograms = [...programs].sort((a, b) => b.netMargin - a.netMargin);
   const beSummary = summarizeBreakEven(classes);

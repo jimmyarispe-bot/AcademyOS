@@ -8,27 +8,47 @@ import { getFinanceExecutiveDashboard } from "@/lib/finance/dashboards";
 
 type AuthClient = Awaited<ReturnType<typeof createAuthClient>>;
 
+/**
+ * COMPUTE ONCE PER SCHOOL, PASS IT DOWN.
+ *
+ * Until 7 September this loop ran computeClassProfitability THREE times per
+ * school with identical arguments -- once here, once inside
+ * computeBreakEvenAnalysis, once inside generateFinancialAlerts -- and
+ * computeProgramProfitability twice. Two of each pair had their results thrown
+ * away. Across four schools that is a dozen redundant multi-table computations
+ * in a job with a 12-second ceiling, which is most of the reason
+ * financialIntelligence.sync had never completed a single run.
+ *
+ * The schools loop stays sequential on purpose: these are heavy write-and-read
+ * passes over shared tables, and running four at once is what makes the
+ * per-school KPI snapshots time out. Cheaper is better than more parallel.
+ */
 export async function syncFinancialIntelligence(supabase: AuthClient) {
-  const { data: schools } = await supabase.from("schools").select("id").limit(50);
+  const { data: schools, error } = await supabase.from("schools").select("id").limit(50);
+  if (error) {
+    console.error("[syncFinancialIntelligence] could not list schools", error.message);
+    return;
+  }
 
   for (const school of schools ?? []) {
-    await computeClassProfitability(supabase, school.id, "monthly");
-    await computeProgramProfitability(supabase, school.id);
-    await computeBreakEvenAnalysis(supabase, school.id);
+    const classes = await computeClassProfitability(supabase, school.id, "monthly");
+    const programs = await computeProgramProfitability(supabase, school.id);
+    await computeBreakEvenAnalysis(supabase, school.id, classes);
     await computeSchoolFinancials(supabase, school.id);
     await getFamilyAnalytics(supabase, school.id, 100);
-    await generateFinancialAlerts(supabase, school.id);
+    await generateFinancialAlerts(supabase, school.id, classes, programs);
   }
 
   await syncFiAlertsToMissionControl(supabase);
 }
 
-async function generateFinancialAlerts(supabase: AuthClient, schoolId: string) {
-  const [classes, programs, finance] = await Promise.all([
-    computeClassProfitability(supabase, schoolId, "monthly"),
-    computeProgramProfitability(supabase, schoolId),
-    getFinanceExecutiveDashboard(supabase, schoolId),
-  ]);
+async function generateFinancialAlerts(
+  supabase: AuthClient,
+  schoolId: string,
+  classes: Awaited<ReturnType<typeof computeClassProfitability>>,
+  programs: Awaited<ReturnType<typeof computeProgramProfitability>>
+) {
+  const finance = await getFinanceExecutiveDashboard(supabase, schoolId);
 
   for (const cls of classes.filter((c) => c.currentEnrollment < c.breakEvenEnrollment)) {
     await upsertFiAlert(supabase, {
