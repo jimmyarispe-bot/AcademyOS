@@ -18,6 +18,8 @@ export default async function JagConnectorsPage({
     qbo?: string;
     gws?: string;
     reason?: string;
+    /** The provider's own explanation, when the callback managed to get one. */
+    detail?: string;
   }>;
 }) {
   const session = await getJagPlatformSession();
@@ -48,15 +50,20 @@ export default async function JagConnectorsPage({
     ...gwsHistory.eventsByJobId,
   };
 
+  // `reason` names the step that failed; `detail` is the provider's own words.
+  // Showing only the step produced "QuickBooks connection failed:
+  // token_exchange" -- true, and useless. invalid_client, invalid_grant and a
+  // redirect_uri mismatch are three different fixes wearing the same label.
   let flash: string | null = null;
+  const detail = params.detail ? ` — ${params.detail}` : "";
   if (params.qbo === "connected") {
     flash = "QuickBooks Online connected successfully.";
   } else if (params.qbo === "error") {
-    flash = `QuickBooks connection failed${params.reason ? `: ${params.reason}` : "."}`;
+    flash = `QuickBooks connection failed${params.reason ? `: ${params.reason}` : "."}${detail}`;
   } else if (params.gws === "connected") {
     flash = "Google Workspace connected successfully.";
   } else if (params.gws === "error") {
-    flash = `Google Workspace connection failed${params.reason ? `: ${params.reason}` : "."}`;
+    flash = `Google Workspace connection failed${params.reason ? `: ${params.reason}` : "."}${detail}`;
   }
 
   return (

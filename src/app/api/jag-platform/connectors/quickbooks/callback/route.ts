@@ -55,7 +55,26 @@ export async function GET(request: Request) {
     realmId,
   });
   if (!tokens.ok) {
-    return redirectToConnectors({ qbo: "error", reason: "token_exchange" });
+    // SAY WHAT INTUIT SAID.
+    //
+    // exchangeTokenRequest already captures Intuit's own explanation --
+    // `json.error_description || json.error` -- into a typed error with a code
+    // and a message. This branch then threw all of it away and redirected with
+    // the bare word "token_exchange", which names the step that failed and
+    // nothing about why.
+    //
+    // The difference matters: "invalid_client" means the secret is wrong,
+    // "invalid_grant" means the code was already used or expired, and
+    // "redirect_uri mismatch" means the URI on the token call does not match
+    // the one on the authorize call. Three different fixes, one indistinguishable
+    // error message.
+    const detail = tokens.error || "unknown";
+    console.error("[qbo callback] token exchange failed", { realmId, detail });
+    return redirectToConnectors({
+      qbo: "error",
+      reason: "token_exchange",
+      detail: detail.slice(0, 300),
+    });
   }
 
   saveQuickBooksTokens({
