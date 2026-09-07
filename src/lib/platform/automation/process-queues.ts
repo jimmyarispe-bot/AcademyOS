@@ -74,7 +74,10 @@ export async function processAllPlatformQueues(
     // job only enqueues, so the messages it writes tonight are delivered on the
     // same run by processCommunicationQueue above only if it happens to run
     // later. One night of latency at worst, and never a double send.
-    { name: "admissions.parentReminders", run: () => processParentReminders(supabase) },
+    // Takes no client: it builds its own service-role one. See the header of
+    // parent-reminders.ts -- handing it the caller's client meant every insert
+    // was refused by RLS on the human path, silently.
+    { name: "admissions.parentReminders", run: () => processParentReminders() },
     { name: "admissions.syncPlatform", run: () => syncAdmissionsQueueToPlatform(supabase) },
     { name: "automation.missionControl", run: () => syncFailedAutomationsToMissionControl(supabase) },
     { name: "sis.spedReminders", run: () => processSpedReviewReminders(supabase) },

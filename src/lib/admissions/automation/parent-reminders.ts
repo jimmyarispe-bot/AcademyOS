@@ -1,4 +1,5 @@
 import type { createAuthClient } from "@/lib/supabase/server-auth";
+import { createServiceRoleClient } from "@/lib/supabase/server";
 
 type AuthClient = Awaited<ReturnType<typeof createAuthClient>>;
 
@@ -204,9 +205,23 @@ async function enqueue(
   return !error;
 }
 
-export async function processParentReminders(
-  supabase: AuthClient
-): Promise<ParentReminderRunSummary> {
+export async function processParentReminders(): Promise<ParentReminderRunSummary> {
+  // THIS JOB RUNS AS THE SERVICE ROLE, WHOEVER TRIGGERED IT.
+  //
+  // The caller's client is deliberately ignored. Two reasons, both learned the
+  // hard way on 6 September:
+  //
+  // 1. admissions_parent_reminders (294) has a read policy and NO insert
+  //    policy -- by design, because the only writer was meant to be this job.
+  //    But processAllPlatformQueues is handed a COOKIE client by
+  //    /dashboard/admissions/automation, and every insert was silently refused
+  //    by RLS. The errors were collected; that page discards the summary.
+  //
+  // 2. Even where it would work, chasing families should not depend on WHO
+  //    loaded a page. A job whose output varies with the trigger's row
+  //    visibility is the same class of bug as the cron that authenticated as
+  //    nobody: it looks like it ran, and it did nothing.
+  const supabase = createServiceRoleClient() as unknown as AuthClient;
   const errors: string[] = [];
   let opened = 0;
   let resolved = 0;
