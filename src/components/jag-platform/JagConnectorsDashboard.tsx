@@ -97,18 +97,40 @@ export function JagConnectorsDashboard({
     router.refresh();
   }
 
-  async function connectQbo(demo = true) {
+  /**
+   * Start a REAL QuickBooks OAuth round trip.
+   *
+   * This was `connectQbo(demo = true)`, called from the Connect button as
+   * `connectQbo(true)`. The route reads:
+   *
+   *     const useDemo = body.demo === true || !configured;
+   *
+   * so sending demo:true took the demo branch WHETHER OR NOT live Intuit
+   * credentials existed. The response then carried no authorizeUrl, the check
+   * below fell through to refresh(), and a fake installation went into the
+   * in-memory connector store on whichever lambda served the POST -- which the
+   * page re-render does not see. The button did nothing, visibly, and would
+   * have done exactly nothing with perfect production keys.
+   *
+   * `demo` is no longer sent. The ROUTE decides, from whether credentials are
+   * configured. And when it does fall back to demo, that is now stated rather
+   * than swallowed: a connector reporting a connection to nothing is the whole
+   * failure this page kept reproducing.
+   */
+  async function connectQbo() {
     setError(null);
     startTransition(async () => {
       const res = await fetch("/api/jag-platform/connectors/quickbooks/connect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ organizationId, demo }),
+        body: JSON.stringify({ organizationId }),
       });
       const data = (await res.json()) as {
         ok: boolean;
         error?: string;
         authorizeUrl?: string;
+        demo?: boolean;
+        message?: string;
       };
       if (!data.ok) {
         setError(data.error ?? "Unable to connect QuickBooks.");
@@ -118,6 +140,12 @@ export function JagConnectorsDashboard({
         window.location.href = data.authorizeUrl;
         return;
       }
+      // No authorizeUrl means the server had no live credentials and fell back
+      // to a demo connection. Say so. Do not present it as a connection.
+      setError(
+        data.message ??
+          "QuickBooks is not configured for live OAuth. Set QUICKBOOKS_CLIENT_ID, QUICKBOOKS_CLIENT_SECRET and QUICKBOOKS_ENVIRONMENT=production in Vercel, then redeploy."
+      );
       refresh();
     });
   }
@@ -145,18 +173,21 @@ export function JagConnectorsDashboard({
   async function reconnectQbo() {
     setError(null);
     startTransition(async () => {
+      // Same fault as connectQbo had: demo:true was hardcoded, so "reconnect"
+      // could never start a real OAuth round trip either. The route decides.
       const res = await fetch(
         "/api/jag-platform/connectors/quickbooks/reconnect",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ organizationId, demo: true }),
+          body: JSON.stringify({ organizationId }),
         }
       );
       const data = (await res.json()) as {
         ok: boolean;
         error?: string;
         authorizeUrl?: string;
+        message?: string;
       };
       if (!data.ok) {
         setError(data.error ?? "Unable to reconnect.");
@@ -166,6 +197,10 @@ export function JagConnectorsDashboard({
         window.location.href = data.authorizeUrl;
         return;
       }
+      setError(
+        data.message ??
+          "QuickBooks is not configured for live OAuth. Set the QUICKBOOKS_* variables in Vercel and redeploy."
+      );
       refresh();
     });
   }
@@ -427,7 +462,7 @@ export function JagConnectorsDashboard({
               <button
                 type="button"
                 disabled={pending}
-                onClick={() => void connectQbo(true)}
+                onClick={() => void connectQbo()}
                 className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-50"
               >
                 Connect

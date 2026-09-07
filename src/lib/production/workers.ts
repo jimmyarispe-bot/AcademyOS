@@ -10,8 +10,29 @@ type AuthClient = Awaited<ReturnType<typeof createAuthClient>>;
 
 export async function processJagPipelineWorker(supabase: AuthClient) {
   const { insightApi } = await import("@/lib/jag-intelligence/api");
-  // Org-scoped runs: process up to a handful of orgs with recent activity
-  const { data: orgs } = await supabase.from("organizations").select("id").limit(5);
+
+  // THE TABLE IS org_organizations, NOT organizations.
+  //
+  // This read named a relation that does not exist. PostgREST answers that with
+  // an ERROR, not with rows -- and the error was discarded, so `orgs` came back
+  // null, the !orgs?.length branch below caught it, and the pipeline has run
+  // ONCE AND UNSCOPED for as long as this file has existed, returning
+  // { runs: 1 } and looking entirely successful.
+  //
+  // The fallback is what hid it. A branch meant for "this deployment has no
+  // organizations yet" quietly became the only branch, and reported the same
+  // shape either way. So the error is checked now: a missing table is loud, and
+  // the fallback runs only when there genuinely are no organizations.
+  const { data: orgs, error } = await supabase
+    .from("org_organizations")
+    .select("id")
+    .limit(5);
+
+  if (error) {
+    console.error("[rc11] could not list organizations", error.message);
+    return { runs: 0 };
+  }
+
   if (!orgs?.length) {
     await insightApi.runPipeline(supabase, {});
     return { runs: 1 };
