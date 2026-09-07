@@ -64,29 +64,27 @@ const RUN_BUDGET_MS = 45_000;
 const PER_JOB_TIMEOUT_MS = 12_000;
 
 /**
- * HOW MANY JOBS MAY RUN AT ONCE, AND WHY THIS IS NOT "ALL OF THEM".
+ * HOW MANY JOBS MAY RUN AT ONCE.
  *
- * Wave 3 fired fourteen sync jobs into a single Promise.allSettled. They do not
- * run on fourteen databases; they run on one, through one connection pool. Past
- * a handful of concurrent multi-query jobs they stop overlapping usefully and
- * start queueing behind each other, and a job that needs three seconds of work
- * spends twelve waiting for a connection and is recorded as "timed out" — which
- * reads as a slow job and is nothing of the sort.
+ * Contention is real but it is NOT the main constraint, and the measurements
+ * that settled that are worth keeping because two plausible theories died here.
  *
- * Two measurements say this is contention rather than slowness:
- *   - kpi.snapshot.org runs ALONE in wave 5 and completes comfortably. The four
- *     per-school snapshots, launched together, all hit the ceiling.
- *   - On 7 Sept, halving the work inside financialIntelligence.sync did not
- *     make it pass. It made SIX of its wave-3 neighbours start failing, because
- *     it now got further through its own queries and held connections longer.
- *     More efficient, more crowded, worse outcome. That is the signature of a
- *     resource ceiling, not of slow code.
+ * The sync jobs used to fire fourteen-at-once into a single Promise.allSettled.
+ * Capping them at three did help: compliance.missionControl and cloud.sync
+ * started passing, having failed at fourteen. So connection-pool contention
+ * exists and a cap is worth having.
  *
- * So jobs run through a small pool. Wall clock per wave goes up; jobs that
- * actually finish goes up considerably more.
+ * But SEVEN jobs still hit the 12s ceiling at three-wide. They are not queueing;
+ * they are genuinely long. Only one of them (googleWorkspace.sync) even touches
+ * the network -- it walks Google's API with an N+1 over Gmail and cannot finish
+ * in twelve seconds by construction, which was already written down on 2 Sept.
+ * The other six are pure database work that simply takes longer than the ceiling.
+ *
+ * So: keep a modest cap, because it demonstrably helps and costs nothing. Do not
+ * expect it to make slow jobs fast. It cannot.
  */
 const DEFAULT_CONCURRENCY = 6;
-const HEAVY_SYNC_CONCURRENCY = 3;
+const HEAVY_SYNC_CONCURRENCY = 4;
 
 /**
  * The underlying work is not cancelled — a promise cannot be. It is abandoned:
@@ -246,7 +244,7 @@ export async function processAllPlatformQueues(
     },
   ]);
 
-  // Wave 3 — independent platform sync jobs.
+  // Wave 3 — mission-control feeds. Cheap, and they are what the dashboards read.
   await run([
     {
       name: "hr.compliance",
@@ -269,6 +267,82 @@ export async function processAllPlatformQueues(
         return syncWorkToMissionControl(supabase);
       },
     },
+  ]);
+
+  // ---------------------------------------------------------------------------
+  // ORDER IS THE POINT FROM HERE ON.
+  //
+  // On 7 Sept the fourteen sync jobs below ran BEFORE the snapshots and insights.
+  // Seven of them hit the 12s ceiling, the wave consumed the entire 45s budget on
+  // its own, and every job after it was recorded as "skipped: run budget
+  // exhausted" -- including the five KPI snapshots and four executive insights,
+  // which had been completing perfectly well.
+  //
+  // So the run spent its whole night on jobs that have never once finished, and
+  // starved the ones that had. Concurrency was not the fault; ORDER was.
+  //
+  // Cheap work that finishes now goes first. The expensive syncs go last, where
+  // being cut off costs nothing that was not already being lost -- and where the
+  // "skipped" lines are an honest inventory of what does not fit rather than
+  // collateral damage.
+  //
+  // This is a triage, NOT a fix. There is more work here than a 60-second HTTP
+  // request can hold, and no ordering changes that. See the note at the bottom.
+  // ---------------------------------------------------------------------------
+
+  // Wave 4 — school insights in parallel (same limit(20) set as before).
+  const { generateExecutiveInsights } = await import("@/lib/executive/insights");
+  const { data: schools } = await supabase.from("schools").select("id").limit(20);
+  if (schools?.length) {
+    await run(
+      schools.map((school) => ({
+        name: `executive.insights.${school.id}`,
+        run: () => generateExecutiveInsights(supabase, school.id),
+      }))
+    );
+  } else {
+    // Counted too. A run with no schools still did this work, and a summary
+    // that omits it would understate what happened.
+    await run([
+      { name: "executive.insights", run: () => generateExecutiveInsights(supabase) },
+    ]);
+  }
+
+  // Wave 5 — org snapshot first (activity event), then school snapshots in parallel.
+  const { captureDailyExecutiveSnapshot } = await import("@/lib/platform/kpi-snapshots");
+  await run([
+    {
+      name: "kpi.snapshot.org",
+      run: () => captureDailyExecutiveSnapshot(supabase, { recordActivityEvent: true }),
+    },
+  ]);
+  if (schools?.length) {
+    await run(
+      schools.map((school) => ({
+        name: `kpi.snapshot.${school.id}`,
+        run: () =>
+          captureDailyExecutiveSnapshot(supabase, {
+            filters: { schoolId: school.id },
+            recordActivityEvent: false,
+          }),
+      }))
+    );
+  }
+
+  // Wave 6 — RC11 production readiness workers (JAG, founder, aging, certs, notifications).
+  await run([
+    {
+      name: "rc11.productionWorkers",
+      run: async () => {
+        const { processRc11ProductionWorkers } = await import("@/lib/production/workers");
+        return processRc11ProductionWorkers(supabase);
+      },
+    },
+  ]);
+
+  // Wave 7 — the expensive platform syncs. LAST, deliberately. Seven of these
+  // exceed the per-job ceiling on their own; whatever budget remains is theirs.
+  await run([
     {
       name: "financialIntelligence.sync",
       run: async () => {
@@ -352,55 +426,27 @@ export async function processAllPlatformQueues(
     },
   ], HEAVY_SYNC_CONCURRENCY);
 
-  // Wave 4 — school insights in parallel (same limit(20) set as before).
-  const { generateExecutiveInsights } = await import("@/lib/executive/insights");
-  const { data: schools } = await supabase.from("schools").select("id").limit(20);
-  if (schools?.length) {
-    await run(
-      schools.map((school) => ({
-        name: `executive.insights.${school.id}`,
-        run: () => generateExecutiveInsights(supabase, school.id),
-      }))
-    );
-  } else {
-    // Counted too. A run with no schools still did this work, and a summary
-    // that omits it would understate what happened.
-    await run([
-      { name: "executive.insights", run: () => generateExecutiveInsights(supabase) },
-    ]);
-  }
-
-  // Wave 5 — org snapshot first (activity event), then school snapshots in parallel.
-  const { captureDailyExecutiveSnapshot } = await import("@/lib/platform/kpi-snapshots");
-  await run([
-    {
-      name: "kpi.snapshot.org",
-      run: () => captureDailyExecutiveSnapshot(supabase, { recordActivityEvent: true }),
-    },
-  ]);
-  if (schools?.length) {
-    await run(
-      schools.map((school) => ({
-        name: `kpi.snapshot.${school.id}`,
-        run: () =>
-          captureDailyExecutiveSnapshot(supabase, {
-            filters: { schoolId: school.id },
-            recordActivityEvent: false,
-          }),
-      }))
-    );
-  }
-
-  // Wave 6 — RC11 production readiness workers (JAG, founder, aging, certs, notifications).
-  await run([
-    {
-      name: "rc11.productionWorkers",
-      run: async () => {
-        const { processRc11ProductionWorkers } = await import("@/lib/production/workers");
-        return processRc11ProductionWorkers(supabase);
-      },
-    },
-  ]);
+  // ---------------------------------------------------------------------------
+  // WHAT IS STILL UNSOLVED, SO NOBODY MISTAKES THIS FOR FINISHED.
+  //
+  // Seven jobs each need more than the 12s per-job ceiling. That is over eighty
+  // seconds of work in the slow tail alone, inside a request that gets sixty.
+  // No ordering, concurrency setting or budget makes those numbers fit; ordering
+  // only decides who gets starved. Right now the starved set is the jobs that
+  // have never completed anyway, which is the best arrangement available but is
+  // not the same as working.
+  //
+  // Fixing it properly means one of:
+  //   * splitting the run across several schedules, so each gets its own 60s;
+  //   * making the slow jobs resumable (a cursor, a few schools per run) rather
+  //     than all-or-nothing -- this is what the 2 Sept note on the Google sync
+  //     already concluded and it applies to the other six;
+  //   * or accepting that these syncs are on-demand, not nightly, and taking
+  //     them out of this path entirely.
+  //
+  // That is a decision about what the school needs nightly, not a code change to
+  // make on someone's behalf.
+  // ---------------------------------------------------------------------------
 
   // Slowest first — the top of this list is the whole diagnosis.
   timings.sort((a, b) => b.ms - a.ms);
