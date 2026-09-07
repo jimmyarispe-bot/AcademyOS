@@ -155,6 +155,74 @@ describe("QuickBooks report parsing", () => {
     expect(parseProfitAndLoss(hs).totalExpenses).toBe(48725.05);
   });
 
+  it("counts ADP and Zelle labour accounts, each exactly once", () => {
+    // How this network actually pays people: ADP for FL and GA's W-2 payroll,
+    // Zelle for HS and Virtual's independent contractors.
+    const books: QboReport = {
+      Rows: {
+        Row: [
+          {
+            type: "Section",
+            group: "Expenses",
+            Rows: {
+              Row: [
+                { ColData: [{ value: "ADP Payroll Fees" }, { value: "1240.00" }] },
+                { ColData: [{ value: "Zelle - Contractor Payments" }, { value: "8300.00" }] },
+                { ColData: [{ value: "Rent" }, { value: "5000.00" }] },
+              ],
+            },
+            Summary: { ColData: [{ value: "Total Expenses" }, { value: "14540.00" }] },
+          },
+        ],
+      },
+    };
+    expect(parseProfitAndLoss(books).laborExpense).toBe(9540);
+
+    // AND THE FAILURE MODE THAT MATTERS. Zelle is a payment method, not a
+    // category. If a book has BOTH a Zelle bank/clearing account and the
+    // contractor expense account the money is categorised into, matching both
+    // counts the same dollars twice -- and 91,123.90 would look every bit as
+    // plausible on a dashboard as 45,561.95.
+    //
+    // The guard is that labour is only ever summed from the EXPENSE sections.
+    // A bank account is not a cost, whatever it is named. Written first as a
+    // leaves-only claim, which was wrong -- this test returned 91,123.90 and
+    // sent the fix back for the scoping it actually needed.
+    const withClearing: QboReport = {
+      Rows: {
+        Row: [
+          {
+            type: "Section",
+            group: "Expenses",
+            Rows: {
+              Row: [
+                {
+                  ColData: [
+                    { value: "66150 Independent Contractor Payment" },
+                    { value: "45561.95" },
+                  ],
+                },
+              ],
+            },
+            Summary: { ColData: [{ value: "Total Expenses" }, { value: "45561.95" }] },
+          },
+          {
+            type: "Section",
+            group: "BankAccounts",
+            Rows: {
+              Row: [
+                { ColData: [{ value: "Zelle Clearing" }, { value: "45561.95" }] },
+              ],
+            },
+            Summary: { ColData: [{ value: "Total Bank" }, { value: "45561.95" }] },
+          },
+        ],
+      },
+    };
+    // 45,561.95 -- not 91,123.90.
+    expect(parseProfitAndLoss(withClearing).laborExpense).toBe(45561.95);
+  });
+
   it("does not mistake interest income for interest expense", () => {
     expect(parseProfitAndLoss(PL).interestExpense).toBe(8200);
   });

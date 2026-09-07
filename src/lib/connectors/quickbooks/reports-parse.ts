@@ -98,13 +98,36 @@ export function sectionTotal(report: QboReport, group: string): number | null {
  * Returns null when nothing matched, so "no depreciation account exists" stays
  * distinguishable from "depreciation was zero".
  */
+/** The sections a COST can legitimately come from. */
+const EXPENSE_GROUPS = ["Expenses", "COGS", "OtherExpenses"];
+
+/**
+ * The rows beneath the named sections, or the whole report when none are named.
+ *
+ * WITHOUT THIS, A BANK ACCOUNT CAN BE COUNTED AS A COST. Zelle is a payment
+ * method, so "Zelle Clearing" is a plausible BALANCE SHEET account name -- and
+ * on a report carrying both that account and the contractor expense the money
+ * is categorised into, a whole-report walk sums the same dollars twice.
+ * 45,561.95 became 91,123.90, and would have looked entirely credible on a
+ * dashboard. The test asserts the pair.
+ */
+function subtreesOf(report: QboReport, groups?: string[]): QboReportRow[] {
+  if (!groups) return report.Rows?.Row ?? [];
+  const found: QboReportRow[] = [];
+  walk(report.Rows?.Row, (row) => {
+    if (row.group && groups.includes(row.group)) found.push(row);
+  });
+  return found;
+}
+
 export function sumMatchingAccounts(
   report: QboReport,
   patterns: RegExp[],
-  options: { matchAncestors?: boolean } = {}
+  options: { matchAncestors?: boolean; within?: string[] } = {}
 ): number | null {
   let total: number | null = null;
-  walk(report.Rows?.Row, (row, ancestors) => {
+  const roots = subtreesOf(report, options.within);
+  walk(roots, (row, ancestors) => {
     // Leaf rows carry ColData directly and have no child Rows. Summing LEAVES
     // ONLY is what stops a section being counted twice -- once as its own
     // subtotal and again as its children.
@@ -157,6 +180,17 @@ const LABOR = [
   /subcontractor/i,
   /\b1099\b/i,
   /\bstipends?\b/i,
+  // The two payment rails this network actually pays people through. ADP runs
+  // FL and GA's W-2 payroll; HS and Virtual pay contractors by Zelle.
+  //
+  // ADP is unambiguous -- nothing else in a chart of accounts is called that.
+  // ZELLE IS NOT. It is a payment METHOD, and an account named for it could be
+  // a bank or clearing account rather than an expense. Where Zelle payments are
+  // categorised into a contractor account -- which is what HS's books do --
+  // this pattern must not match a second account carrying the same money.
+  // The guard is the test below: HS's labour is 45,561.95, once.
+  /\badp\b/i,
+  /\bzelle\b/i,
 ];
 const DEPRECIATION = [/depreciation/i];
 const AMORTIZATION = [/amorti[sz]ation/i];
@@ -185,10 +219,13 @@ export function parseProfitAndLoss(report: QboReport): ParsedProfitAndLoss {
     netIncome: sectionTotal(report, "NetIncome"),
     // matchAncestors: a sub-account under a Payroll section is labour even
     // when its own name never says so.
-    laborExpense: sumMatchingAccounts(report, LABOR, { matchAncestors: true }),
-    depreciation: sumMatchingAccounts(report, DEPRECIATION),
-    amortization: sumMatchingAccounts(report, AMORTIZATION),
-    interestExpense: sumMatchingAccounts(report, INTEREST),
+    laborExpense: sumMatchingAccounts(report, LABOR, {
+      matchAncestors: true,
+      within: EXPENSE_GROUPS,
+    }),
+    depreciation: sumMatchingAccounts(report, DEPRECIATION, { within: EXPENSE_GROUPS }),
+    amortization: sumMatchingAccounts(report, AMORTIZATION, { within: EXPENSE_GROUPS }),
+    interestExpense: sumMatchingAccounts(report, INTEREST, { within: EXPENSE_GROUPS }),
   };
 }
 
