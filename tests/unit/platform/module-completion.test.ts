@@ -42,10 +42,16 @@ describe("Module Completion Standard v2", () => {
     expect(evaluateEiGate(students).verdict).toBe("pass");
   });
 
+  // 20s, not the 5s default. This test walks the repository -- every gate for
+  // every module -- and on a loaded Windows box inside the full 2555-test run
+  // that intermittently crossed 5s and failed as if the code were broken. The
+  // readers are memoised now, which took a repeat call from ~430ms to ~10ms,
+  // but a COLD first call still does real disk work and its duration is a
+  // property of the machine, not of the code under test.
   it("buildReleaseReport returns module snapshots", () => {
     const report = buildReleaseReport();
     expect(report.modules.length).toBeGreaterThanOrEqual(5);
     expect(report.generatedAt).toBeTruthy();
     expect(typeof report.ok).toBe("boolean");
-  });
+  }, 20_000);
 });

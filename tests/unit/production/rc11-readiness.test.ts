@@ -77,6 +77,12 @@ describe("RC-11 — Production Readiness", () => {
     expect(evaluatePerformanceGate(mod).verdict).not.toBe("fail");
   });
 
+  // 20s, not the 5s default. This test walks the repository -- every gate for
+  // every module -- and on a loaded Windows box inside the full 2555-test run
+  // that intermittently crossed 5s and failed as if the code were broken. The
+  // readers are memoised now, which took a repeat call from ~430ms to ~10ms,
+  // but a COLD first call still does real disk work and its duration is a
+  // property of the machine, not of the code under test.
   it("release dashboard includes RC11 readiness columns", () => {
     const rows = buildReleaseDashboardRows();
     expect(rows.length).toBeGreaterThan(0);
@@ -86,7 +92,7 @@ describe("RC-11 — Production Readiness", () => {
     expect(sample.cells.performance).toBeDefined();
     expect(sample.cells.extension).toBeDefined();
     expect(sample.cells.security).toBeDefined();
-  });
+  }, 20_000);
 
   it("ops runbooks exist for deploy / rollback / DR", () => {
     for (const rel of [

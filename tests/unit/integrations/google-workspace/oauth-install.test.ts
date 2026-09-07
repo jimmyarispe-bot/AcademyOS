@@ -74,6 +74,64 @@ describe("RC-2.01 — Google Workspace OAuth Installation", () => {
     }
   });
 
+  it("asks for the wide scopes only on the per-user flow", () => {
+    const prevId = process.env.GOOGLE_WORKSPACE_CLIENT_ID;
+    const prevSecret = process.env.GOOGLE_WORKSPACE_CLIENT_SECRET;
+    process.env.GOOGLE_WORKSPACE_CLIENT_ID = "google-client-demo";
+    process.env.GOOGLE_WORKSPACE_CLIENT_SECRET = "google-secret-demo";
+    process.env.NEXT_PUBLIC_APP_URL = "https://jag.local";
+
+    try {
+      const org = buildGoogleConnectAuthorizeUrl({
+        organizationId: "org-1",
+        userId: "user-1",
+      });
+      const user = buildGoogleConnectAuthorizeUrl({
+        organizationId: "org-1",
+        userId: "user-1",
+        mode: "user",
+      });
+      if ("error" in org || "error" in user) throw new Error("expected URLs");
+
+      const orgScopes = decodeURIComponent(
+        new URL(org.authorizeUrl).searchParams.get("scope") ?? ""
+      ).split(" ");
+      const userScopes = decodeURIComponent(
+        new URL(user.authorizeUrl).searchParams.get("scope") ?? ""
+      ).split(" ");
+
+      // The three that make a personal workspace real. Each is the CONTENT
+      // scope, not the metadata one -- gmail.metadata cannot return bodies or
+      // search, calendar.readonly cannot create an event, and
+      // drive.metadata.readonly returns a file list you cannot open.
+      for (const scope of [
+        "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/calendar",
+        "https://www.googleapis.com/auth/drive.readonly",
+      ]) {
+        expect(userScopes).toContain(scope);
+        // And the org grant must NOT have them. It covers every mailbox in the
+        // domain behind one token no individual can revoke, so widening it is
+        // a different decision entirely -- one nobody has made.
+        expect(orgScopes).not.toContain(scope);
+      }
+
+      expect(orgScopes).toContain(
+        "https://www.googleapis.com/auth/gmail.metadata"
+      );
+      // A teacher connecting their own mailbox is not a directory admin.
+      expect(userScopes).not.toContain(
+        "https://www.googleapis.com/auth/admin.directory.user.readonly"
+      );
+      expect(orgScopes).toContain(
+        "https://www.googleapis.com/auth/admin.directory.user.readonly"
+      );
+    } finally {
+      process.env.GOOGLE_WORKSPACE_CLIENT_ID = prevId;
+      process.env.GOOGLE_WORKSPACE_CLIENT_SECRET = prevSecret;
+    }
+  });
+
   it("rejects a state whose payload has been tampered with", () => {
     const prevId = process.env.GOOGLE_WORKSPACE_CLIENT_ID;
     const prevSecret = process.env.GOOGLE_WORKSPACE_CLIENT_SECRET;

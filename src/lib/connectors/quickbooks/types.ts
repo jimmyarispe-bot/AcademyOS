@@ -24,6 +24,14 @@ export type QboTokenBundle = {
   readonly accessToken: string;
   readonly refreshToken: string;
   readonly expiresAt: string;
+  /**
+   * Intuit's REFRESH token has its own expiry (x_refresh_token_expires_in,
+   * ~100 days). A book nobody syncs therefore dies quietly with no error and no
+   * warning. Intuit has always sent this; the exchange parsed it into the
+   * response type and then dropped it, so the column migration 298 created for
+   * it could never be filled.
+   */
+  readonly refreshTokenExpiresAt?: string;
   readonly realmId: string;
   readonly companyName: string;
   readonly environment: "sandbox" | "production";

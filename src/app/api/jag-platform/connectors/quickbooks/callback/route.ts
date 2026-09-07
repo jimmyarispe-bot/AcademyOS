@@ -5,6 +5,7 @@ import {
   parseQuickBooksOAuthState,
   saveQuickBooksTokens,
 } from "@/lib/connectors";
+import { saveQuickBooksConnection } from "@/lib/connectors/quickbooks/persistence";
 import { getJagPlatformSession } from "@/lib/jag-platform/server-session";
 import { resolvePublicAppOrigin } from "@/lib/platform/branding";
 
@@ -77,6 +78,37 @@ export async function GET(request: Request) {
     });
   }
 
+  // DURABLE FIRST, AND ITS FAILURE IS FATAL TO THE REDIRECT.
+  //
+  // Until now this route called only saveQuickBooksTokens, which writes to
+  // `globalThis.__jagConnectorStore` -- in memory, per lambda instance, gone on
+  // the next cold start. On 7 September all five books authorised through
+  // Intuit successfully and fi_quickbooks_connections held zero rows. The
+  // connect flow said "connected" and stored nothing that outlived the request.
+  //
+  // So the database write happens first and a failure surfaces as an error
+  // instead of a green banner. Reporting success for a connection that was not
+  // persisted is the exact fault this route already had twice today.
+  const saved = await saveQuickBooksConnection({
+    organizationId: parsed.organizationId,
+    userId: session.userId,
+    tokens: tokens.tokens,
+  });
+
+  if (!saved.ok) {
+    console.error("[qbo callback] persist failed", {
+      realmId,
+      error: saved.error,
+    });
+    return redirectToConnectors({
+      qbo: "error",
+      reason: "not_saved",
+      detail: saved.error.slice(0, 300),
+    });
+  }
+
+  // The in-memory store still backs the existing connectors dashboard reads
+  // within this instance. It is a cache now, not the record.
   saveQuickBooksTokens({
     organizationId: parsed.organizationId,
     tokens: tokens.tokens,
@@ -85,5 +117,9 @@ export async function GET(request: Request) {
   return redirectToConnectors({
     org: parsed.organizationId,
     qbo: "connected",
+    // A new book arrives unmapped -- Intuit's company picker chose the realm,
+    // not JAG. The connectors page can prompt for the mapping instead of the
+    // person discovering later that GA's figures sat under FL.
+    ...(saved.created ? { mapping: "needed" } : {}),
   });
 }

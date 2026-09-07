@@ -60,7 +60,13 @@ type TokenResponse = {
 async function exchangeTokenRequest(
   body: URLSearchParams
 ): Promise<
-  | { ok: true; accessToken: string; refreshToken: string; expiresAt: string }
+  | {
+      ok: true;
+      accessToken: string;
+      refreshToken: string;
+      expiresAt: string;
+      refreshTokenExpiresAt?: string;
+    }
   | { ok: false; error: ReturnType<typeof qboError> }
 > {
   const cfg = quickbooksClientConfig();
@@ -124,11 +130,19 @@ async function exchangeTokenRequest(
   }
 
   const expiresIn = Number(json.expires_in ?? 3600);
+  const refreshExpiresIn = Number(json.x_refresh_token_expires_in ?? 0);
   return {
     ok: true,
     accessToken: json.access_token,
     refreshToken: json.refresh_token,
     expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
+    // Parsed into TokenResponse since the beginning and never read. Storing it
+    // is what lets a check say "this book stops working on the 14th" instead of
+    // discovering it as an empty report.
+    refreshTokenExpiresAt:
+      refreshExpiresIn > 0
+        ? new Date(Date.now() + refreshExpiresIn * 1000).toISOString()
+        : undefined,
   };
 }
 
@@ -154,6 +168,7 @@ export async function exchangeQuickBooksAuthorizationCode(input: {
       accessToken: result.accessToken,
       refreshToken: result.refreshToken,
       expiresAt: result.expiresAt,
+      refreshTokenExpiresAt: result.refreshTokenExpiresAt,
       realmId: input.realmId,
       companyName: input.companyName ?? `QuickBooks Company ${input.realmId}`,
       environment: cfg.environment,

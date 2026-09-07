@@ -252,11 +252,17 @@ export function buildGoogleConnectAuthorizeUrl(input: {
   // is not consenting on the domain's behalf and must not be asked to.
   const adminConsent = mode === "org";
 
+  // The scope list follows `mode`, not just the consent prompt. The org grant
+  // stays metadata-only because it reaches every mailbox in the domain; the
+  // per-user grant carries gmail.readonly, calendar and drive.readonly because
+  // it reaches exactly one person's, with their own consent and their own
+  // revocation. See GOOGLE_USER_OAUTH_SCOPES for the full reasoning.
   const oauth = googleWorkspaceOAuthConfig({
     clientId,
     clientSecret,
     redirectUri: googleWorkspaceRedirectUri(),
     adminConsent,
+    mode,
   });
 
   const authorizeUrl = buildGoogleWorkspaceAuthorizeUrl(oauth, {

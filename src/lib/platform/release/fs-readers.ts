@@ -10,6 +10,42 @@ import { join } from "node:path";
 
 const ROOT = process.cwd();
 
+/**
+ * MEMOISED, because these readers are neither cheap nor changing.
+ *
+ * buildReleaseReport() evaluates 14 gates across 14 modules, and the gates ask
+ * this module hundreds of questions -- existsSync per probe, a RECURSIVE
+ * directory walk per testPath, and a read of every migration SQL file. On a
+ * warm Linux checkout that is ~400ms. Inside a 2555-test run on Windows, with
+ * several vitest workers competing for the disk and a virus scanner opening
+ * every file, it intermittently crossed the 5s test timeout -- which surfaced
+ * as `release dashboard includes RC11 readiness columns` and `buildReleaseReport
+ * returns module snapshots` failing together, at random, on changes that had
+ * nothing to do with either. Two runs of identical code gave 1 failure, then 0,
+ * then 2.
+ *
+ * The repository does not change while a process runs -- not during a test run,
+ * and not in a deployed build where the tree is fixed at deploy time. So each
+ * distinct question is answered from disk once.
+ *
+ * Cached by an explicit key rather than by arguments: several of these take a
+ * moduleId plus a probe name, and a key built at the call site keeps the cache
+ * honest about what it is keyed on.
+ */
+const fsCache = new Map<string, unknown>();
+
+function memo<T>(key: string, compute: () => T): T {
+  if (fsCache.has(key)) return fsCache.get(key) as T;
+  const value = compute();
+  fsCache.set(key, value);
+  return value;
+}
+
+/** Tests that create or remove files mid-run must clear this. */
+export function resetReleaseFsCache(): void {
+  fsCache.clear();
+}
+
 function dirHasSourceFiles(abs: string): boolean {
   if (!existsSync(abs)) return false;
   try {
@@ -64,7 +100,7 @@ const FEATURE_DOC_READERS: Record<string, () => string> = {
     readFileSync(join(ROOT, "docs/platform/jag-intelligence-engine.md"), "utf8"),
 };
 
-export function moduleDocsExist(docsPath: string): boolean {
+function uncached_moduleDocsExist(docsPath: string): boolean {
   const reader = FEATURE_DOC_READERS[docsPath];
   if (!reader) return false;
   try {
@@ -75,7 +111,7 @@ export function moduleDocsExist(docsPath: string): boolean {
   }
 }
 
-export function readModuleDocs(docsPath: string): string | null {
+function uncached_readModuleDocs(docsPath: string): string | null {
   const reader = FEATURE_DOC_READERS[docsPath];
   if (!reader) return null;
   try {
@@ -85,7 +121,7 @@ export function readModuleDocs(docsPath: string): string | null {
   }
 }
 
-export function repoFileExists(relPath: string): boolean {
+function uncached_repoFileExists(relPath: string): boolean {
   switch (relPath) {
     case "src/lib/communications":
       return existsSync(join(ROOT, "src/lib/communications"));
@@ -130,7 +166,7 @@ export function repoFileExists(relPath: string): boolean {
   }
 }
 
-export function readPlaywrightConfig(): string {
+function uncached_readPlaywrightConfig(): string {
   try {
     return readFileSync(join(ROOT, "playwright.config.ts"), "utf8");
   } catch {
@@ -146,7 +182,7 @@ type ModuleLibProbe =
   | "server-actions.ts"
   | "lifecycle/actions.ts";
 
-export function moduleLibProbe(moduleId: string, probe: ModuleLibProbe): boolean {
+function uncached_moduleLibProbe(moduleId: string, probe: ModuleLibProbe): boolean {
   switch (`${moduleId}:${probe}`) {
     case "students:dir":
       return existsSync(join(ROOT, "src/lib/students"));
@@ -321,7 +357,7 @@ export function moduleLibProbe(moduleId: string, probe: ModuleLibProbe): boolean
   }
 }
 
-export function moduleLibFileExists(moduleId: string, ...parts: string[]): boolean {
+function uncached_moduleLibFileExists(moduleId: string, ...parts: string[]): boolean {
   const probe = parts.join("/") as ModuleLibProbe;
   if (
     probe !== "access.ts" &&
@@ -335,11 +371,11 @@ export function moduleLibFileExists(moduleId: string, ...parts: string[]): boole
   return moduleLibProbe(moduleId, probe);
 }
 
-export function moduleLibDirExists(moduleId: string): boolean {
+function uncached_moduleLibDirExists(moduleId: string): boolean {
   return moduleLibProbe(moduleId, "dir");
 }
 
-export function moduleUiSurfaceExists(moduleId: string): boolean {
+function uncached_moduleUiSurfaceExists(moduleId: string): boolean {
   switch (moduleId) {
     case "students":
       return (
@@ -416,7 +452,7 @@ export function moduleUiSurfaceExists(moduleId: string): boolean {
   }
 }
 
-export function testPathHasFiles(rel: string): boolean {
+function uncached_testPathHasFiles(rel: string): boolean {
   switch (rel) {
     case "tests/unit/students":
       return dirHasSourceFiles(join(ROOT, "tests/unit/students"));
@@ -459,7 +495,7 @@ export function testPathHasFiles(rel: string): boolean {
   }
 }
 
-export function readMigrationSqlFiles(): string[] {
+function uncached_readMigrationSqlFiles(): string[] {
   const migrationDir = join(ROOT, "supabase", "migrations");
   if (!existsSync(migrationDir)) return [];
   try {
@@ -476,4 +512,57 @@ export function readMigrationSqlFiles(): string[] {
   } catch {
     return [];
   }
+}
+
+/* ---------------------------------------------------------------------------
+ * Cached public surface.
+ *
+ * Each wrapper keys on exactly the arguments its reader uses, so two different
+ * questions can never share an answer. `moduleLibFileExists` joins its variadic
+ * parts with "/" -- the same characters the path itself uses -- rather than
+ * with a separator that could collide with a module id.
+ * ------------------------------------------------------------------------- */
+
+export function moduleDocsExist(docsPath: string): boolean {
+  return memo(`docsExist:${docsPath}`, () => uncached_moduleDocsExist(docsPath));
+}
+
+export function readModuleDocs(docsPath: string): string | null {
+  return memo(`docs:${docsPath}`, () => uncached_readModuleDocs(docsPath));
+}
+
+export function repoFileExists(relPath: string): boolean {
+  return memo(`repoFile:${relPath}`, () => uncached_repoFileExists(relPath));
+}
+
+export function readPlaywrightConfig(): string {
+  return memo("playwrightConfig", () => uncached_readPlaywrightConfig());
+}
+
+export function moduleLibProbe(moduleId: string, probe: ModuleLibProbe): boolean {
+  return memo(`libProbe:${moduleId}:${probe}`, () =>
+    uncached_moduleLibProbe(moduleId, probe)
+  );
+}
+
+export function moduleLibFileExists(moduleId: string, ...parts: string[]): boolean {
+  return memo(`libFile:${moduleId}:${parts.join("/")}`, () =>
+    uncached_moduleLibFileExists(moduleId, ...parts)
+  );
+}
+
+export function moduleLibDirExists(moduleId: string): boolean {
+  return memo(`libDir:${moduleId}`, () => uncached_moduleLibDirExists(moduleId));
+}
+
+export function moduleUiSurfaceExists(moduleId: string): boolean {
+  return memo(`uiSurface:${moduleId}`, () => uncached_moduleUiSurfaceExists(moduleId));
+}
+
+export function testPathHasFiles(rel: string): boolean {
+  return memo(`testPath:${rel}`, () => uncached_testPathHasFiles(rel));
+}
+
+export function readMigrationSqlFiles(): string[] {
+  return memo("migrationSql", () => uncached_readMigrationSqlFiles());
 }
