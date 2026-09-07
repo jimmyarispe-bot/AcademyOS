@@ -52,9 +52,15 @@ export interface PlatformQueueRunSummary {
  * A bigger number does not fix that; there isn't one on this plan. So the run
  * now lives inside a budget it enforces itself:
  *
- *   - Every job races a per-job timeout. One hung query cannot eat the run.
+ *   - Every job races a per-job timeout, capped by whatever is left of the
+ *     budget. A wave starting at 43s cannot then run 12s more and land at 55 —
+ *     which it did on 7 Sept, five seconds under a hard ceiling of 60.
  *   - Before each wave, the remaining budget is checked. Out of time means the
  *     rest are recorded as skipped rather than silently never attempted.
+ *
+ * RUN_BUDGET_MS is therefore a real bound on the whole run, not on when work is
+ * allowed to start. That distinction is the difference between a run that
+ * reports what it did and a 504 that reports nothing.
  *
  * The point is not that everything finishes. It is that the run ALWAYS returns
  * and always says what it did — so a slow job is named in the log instead of
@@ -127,7 +133,8 @@ interface JobOutcome {
  */
 async function runParallelJobs(
   jobs: NamedJob[],
-  concurrency: number
+  concurrency: number,
+  deadline: number
 ): Promise<JobOutcome[]> {
   const outcomes: JobOutcome[] = new Array(jobs.length);
   let cursor = 0;
@@ -138,9 +145,33 @@ async function runParallelJobs(
       const job = jobs[index];
       if (!job) return;
 
+      // THE PER-JOB CLOCK MUST RESPECT THE RUN'S DEADLINE, NOT JUST ITS OWN.
+      //
+      // The budget check happens before a WAVE starts, so it only ever bounded
+      // when work began, never when it ended. On 7 Sept a wave started at ~43s,
+      // one of its jobs took the full 12s, and the run finished at 55.4s -- with
+      // Vercel's hard ceiling at 60. A slightly slower night crosses it, the
+      // function is killed, and we are back to a 504 with no run log: exactly
+      // the failure this whole budget was built to end.
+      //
+      // So a job gets the smaller of its own ceiling and whatever is left.
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        outcomes[index] = {
+          name: job.name,
+          ms: 0,
+          ok: false,
+          error: "skipped: no budget remaining",
+        };
+        continue;
+      }
+
       const jobStartedAt = Date.now();
       try {
-        await withTimeout(Promise.resolve(job.run()), PER_JOB_TIMEOUT_MS);
+        await withTimeout(
+          Promise.resolve(job.run()),
+          Math.min(PER_JOB_TIMEOUT_MS, remaining)
+        );
         outcomes[index] = { name: job.name, ms: Date.now() - jobStartedAt, ok: true };
       } catch (err) {
         outcomes[index] = {
@@ -190,7 +221,11 @@ export async function processAllPlatformQueues(
     }
     jobsRun += jobs.length;
 
-    for (const outcome of await runParallelJobs(jobs, concurrency)) {
+    for (const outcome of await runParallelJobs(
+      jobs,
+      concurrency,
+      startedAt + RUN_BUDGET_MS
+    )) {
       timings.push({ name: outcome.name, ms: outcome.ms, ok: outcome.ok });
       if (!outcome.ok) {
         failures.push({ name: outcome.name, error: outcome.error ?? "failed" });
