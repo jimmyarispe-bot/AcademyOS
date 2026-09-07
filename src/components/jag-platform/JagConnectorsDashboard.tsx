@@ -242,18 +242,21 @@ export function JagConnectorsDashboard({
     });
   }
 
-  async function connectGws(demo = true) {
+  /** Same fault, same fix as connectQbo — see the note there. */
+  async function connectGws() {
     setError(null);
     startTransition(async () => {
       const res = await fetch("/api/jag-platform/connectors/google/connect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ organizationId, demo }),
+        body: JSON.stringify({ organizationId }),
       });
       const data = (await res.json()) as {
         ok: boolean;
         error?: string;
         authorizeUrl?: string;
+        demo?: boolean;
+        message?: string;
       };
       if (!data.ok) {
         setError(data.error ?? "Unable to connect Google Workspace.");
@@ -263,6 +266,10 @@ export function JagConnectorsDashboard({
         window.location.href = data.authorizeUrl;
         return;
       }
+      setError(
+        data.message ??
+          "Google Workspace is not configured for live OAuth on this deployment."
+      );
       refresh();
     });
   }
@@ -625,7 +632,7 @@ export function JagConnectorsDashboard({
               <button
                 type="button"
                 disabled={pending}
-                onClick={() => void connectGws(true)}
+                onClick={() => void connectGws()}
                 className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-50"
               >
                 Connect
@@ -644,7 +651,7 @@ export function JagConnectorsDashboard({
                 <button
                   type="button"
                   disabled={pending}
-                  onClick={() => void connectGws(true)}
+                  onClick={() => void connectGws()}
                   className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-100 disabled:opacity-50"
                 >
                   Reconnect
@@ -672,7 +679,7 @@ export function JagConnectorsDashboard({
                 <button
                   type="button"
                   disabled={pending}
-                  onClick={() => void connectGws(true)}
+                  onClick={() => void connectGws()}
                   className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium disabled:opacity-50"
                 >
                   Reconnect
