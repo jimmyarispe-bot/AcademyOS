@@ -32,11 +32,58 @@ export interface PlatformQueueRunSummary {
 }
 
 /**
- * Run independent jobs concurrently. Failures are collected; callers still receive success
- * after best-effort processing (same jobs as before, higher throughput).
+ * THE BUDGET, AND WHY IT EXISTS.
+ *
+ * This runner has thirty-odd jobs across six sequential waves. On Vercel it
+ * gets 60 seconds total (the Hobby ceiling) and it was previously getting 10.
+ * When the wall clock ran out the function was killed mid-flight: no response,
+ * no run log, HTTP 504 returned to a scheduler with nobody to tell. That is why
+ * platform_job_runs was empty and why nothing in this system has ever completed
+ * a nightly run.
+ *
+ * A bigger number does not fix that; there isn't one on this plan. So the run
+ * now lives inside a budget it enforces itself:
+ *
+ *   - Every job races a per-job timeout. One hung query cannot eat the run.
+ *   - Before each wave, the remaining budget is checked. Out of time means the
+ *     rest are recorded as skipped rather than silently never attempted.
+ *
+ * The point is not that everything finishes. It is that the run ALWAYS returns
+ * and always says what it did — so a slow job is named in the log instead of
+ * taking the whole night down with it.
  */
+const RUN_BUDGET_MS = 45_000;
+const PER_JOB_TIMEOUT_MS = 12_000;
+
+/**
+ * The underlying work is not cancelled — a promise cannot be. It is abandoned:
+ * we stop waiting and record the fact. On serverless the process is frozen
+ * after the response anyway, so an abandoned job simply does not finish.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`timed out after ${ms}ms`)),
+      ms
+    );
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}
+
+/** Run independent jobs concurrently, each under its own clock. */
 async function runParallelJobs(jobs: NamedJob[]): Promise<{ name: string; error: string }[]> {
-  const settled = await Promise.allSettled(jobs.map((job) => job.run()));
+  const settled = await Promise.allSettled(
+    jobs.map((job) => withTimeout(Promise.resolve(job.run()), PER_JOB_TIMEOUT_MS))
+  );
   const failures: { name: string; error: string }[] = [];
   settled.forEach((result, index) => {
     if (result.status === "rejected") {
@@ -63,6 +110,19 @@ export async function processAllPlatformQueues(
   // module must not stop the other thirty from running — but they are no
   // longer silently dropped on the floor.
   const run = async (jobs: NamedJob[]) => {
+    // Out of budget: record the rest rather than starting work that will be
+    // killed halfway through. A named "skipped" is information; a 504 is not.
+    const elapsed = Date.now() - startedAt;
+    if (elapsed > RUN_BUDGET_MS) {
+      for (const job of jobs) {
+        failures.push({
+          name: job.name,
+          error: `skipped: run budget exhausted at ${elapsed}ms`,
+        });
+      }
+      jobsRun += jobs.length;
+      return;
+    }
     jobsRun += jobs.length;
     failures.push(...(await runParallelJobs(jobs)));
   };
