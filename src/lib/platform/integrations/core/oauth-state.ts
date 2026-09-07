@@ -9,6 +9,23 @@ import { createHmac, timingSafeEqual } from "crypto";
 export type OAuthStateClaims = {
   organizationId: string;
   userId: string;
+  /**
+   * Which kind of connection this round trip is for.
+   *
+   * "org"  — the single organisation-wide grant in integration_connections.
+   *          Directory reads, the Classroom catalogue. Requires an integration
+   *          admin permission.
+   * "user" — one staff member's own account, in user_google_connections. Their
+   *          mail, their calendar. Requires only that they are signed in.
+   *
+   * IT IS SIGNED, deliberately. The prefix in the state string is NOT covered
+   * by the HMAC — only the payload is — so distinguishing the two flows by
+   * prefix alone would let the mode be edited in transit. Carrying it as a
+   * claim means it cannot be.
+   *
+   * Absent means "org", so states issued before this existed still parse.
+   */
+  mode?: "org" | "user";
   /** Expiry unix ms */
   exp: number;
   /** One-time nonce */
@@ -43,12 +60,13 @@ function safeEqual(a: string, b: string): boolean {
 
 export function createSignedOAuthState(
   prefix: string,
-  input: { organizationId: string; userId: string },
+  input: { organizationId: string; userId: string; mode?: "org" | "user" },
   ttlMs = DEFAULT_TTL_MS
 ): string {
   const claims: OAuthStateClaims = {
     organizationId: input.organizationId,
     userId: input.userId,
+    ...(input.mode ? { mode: input.mode } : {}),
     exp: Date.now() + ttlMs,
     n: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`,
   };
@@ -85,6 +103,12 @@ export function parseSignedOAuthState(
     return {
       organizationId: claims.organizationId,
       userId: claims.userId,
+      // Carried through deliberately. This function rebuilds the object field
+      // by field rather than spreading the parsed claims, so anything not named
+      // here is silently dropped -- which is exactly what happened to `mode`
+      // the first time: signed correctly, verified correctly, and discarded on
+      // the way out. Only "user" is honoured; anything else means org.
+      ...(claims.mode === "user" ? { mode: "user" as const } : {}),
       exp: claims.exp,
       n: claims.n,
     };

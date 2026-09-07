@@ -221,9 +221,16 @@ export async function getGoogleWorkspaceStatus(
   });
 }
 
+/**
+ * @param mode "org" (default) for the single organisation-wide grant;
+ *   "user" for one staff member connecting their own account. Both use the SAME
+ *   redirect URI — the mode travels in the signed state — so adding the
+ *   per-user flow required no new registration in Google Cloud.
+ */
 export function buildGoogleConnectAuthorizeUrl(input: {
   organizationId: string;
   userId: string;
+  mode?: "org" | "user";
 }): { authorizeUrl: string; state: string } | { error: string } {
   const { clientId, clientSecret, configured } = googleWorkspaceClientConfig();
   if (!configured) {
@@ -233,21 +240,28 @@ export function buildGoogleConnectAuthorizeUrl(input: {
     };
   }
 
+  const mode = input.mode ?? "org";
+
   const state = createSignedOAuthState("gw", {
     organizationId: input.organizationId,
     userId: input.userId,
+    mode,
   });
+
+  // adminConsent only for the org grant. A teacher connecting their own mailbox
+  // is not consenting on the domain's behalf and must not be asked to.
+  const adminConsent = mode === "org";
 
   const oauth = googleWorkspaceOAuthConfig({
     clientId,
     clientSecret,
     redirectUri: googleWorkspaceRedirectUri(),
-    adminConsent: true,
+    adminConsent,
   });
 
   const authorizeUrl = buildGoogleWorkspaceAuthorizeUrl(oauth, {
     state,
-    adminConsent: true,
+    adminConsent,
   });
 
   return { authorizeUrl, state };
@@ -256,16 +270,34 @@ export function buildGoogleConnectAuthorizeUrl(input: {
 export function parseGoogleOAuthState(state: string): {
   organizationId: string;
   userId: string;
+  mode: "org" | "user";
 } | null {
   const claims = parseSignedOAuthState("gw", state);
   if (!claims) return null;
-  return { organizationId: claims.organizationId, userId: claims.userId };
+  return {
+    organizationId: claims.organizationId,
+    userId: claims.userId,
+    // Absent means org — states issued before the per-user flow existed still
+    // parse, and default to the behaviour they were issued for.
+    mode: claims.mode === "user" ? "user" : "org",
+  };
 }
 
 export async function exchangeGoogleAuthorizationCode(code: string): Promise<{
   accessToken: string;
   refreshToken: string;
   expiresAt: string;
+  /**
+   * WHAT GOOGLE ACTUALLY GRANTED, from the token response's `scope` field.
+   *
+   * Google may grant a subset of what was requested — the user can decline
+   * individual permissions on the consent screen. This was previously parsed
+   * and thrown away, which meant a feature needing gmail.readonly and given
+   * only gmail.metadata would return an empty result indistinguishable from an
+   * empty inbox. Store it; let features check it and say "reconnect to enable
+   * this" instead.
+   */
+  grantedScopes: string[];
 } | { error: string }> {
   const { clientId, clientSecret, configured } = googleWorkspaceClientConfig();
   if (!configured) {
@@ -290,6 +322,7 @@ export async function exchangeGoogleAuthorizationCode(code: string): Promise<{
     access_token?: string;
     refresh_token?: string;
     expires_in?: number;
+    scope?: string;
     error?: string;
     error_description?: string;
   };
@@ -308,6 +341,7 @@ export async function exchangeGoogleAuthorizationCode(code: string): Promise<{
     accessToken: json.access_token,
     refreshToken: json.refresh_token ?? "",
     expiresAt,
+    grantedScopes: (json.scope ?? "").split(" ").filter(Boolean),
   };
 }
 
