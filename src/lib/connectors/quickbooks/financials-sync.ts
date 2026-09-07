@@ -47,6 +47,18 @@ function apiBase(): string {
     : "https://sandbox-quickbooks.api.intuit.com";
 }
 
+/**
+ * Which basis to ask QuickBooks for.
+ *
+ * NOT AN IMPLEMENTATION DETAIL. The Academy Way Network files its 1120-S on
+ * CASH basis (Schedule B line 1). A 2025 sync run on Accrual reconciled
+ * interest to $29 and labour to 1.3%, and was 47% short on revenue -- payroll
+ * and interest land in the same period either way, tuition does not. Both bases
+ * are legitimate answers to different questions; a figure that does not say
+ * which one it answers is not an answer.
+ */
+export type AccountingMethod = "Cash" | "Accrual";
+
 /** Calendar year to date, in the books' own terms. */
 export function defaultPeriod(now = new Date()): { start: string; end: string } {
   const year = now.getUTCFullYear();
@@ -89,6 +101,7 @@ export type FinancialsSyncResult = {
   realmId: string;
   companyName: string | null;
   scope: string;
+  accountingMethod: AccountingMethod;
   ok: boolean;
   error?: string;
   figures?: ParsedProfitAndLoss & { cashBalance: number | null };
@@ -99,12 +112,14 @@ export type FinancialsSyncResult = {
 async function syncOne(
   organizationId: string,
   conn: QboConnectionRow,
-  period: { start: string; end: string }
+  period: { start: string; end: string },
+  method: AccountingMethod
 ): Promise<FinancialsSyncResult> {
   const base = {
     realmId: conn.realm_id,
     companyName: conn.company_name,
     scope: conn.scope,
+    accountingMethod: method,
   };
 
   const token = await ensureQuickBooksAccessToken(organizationId, conn.realm_id);
@@ -113,13 +128,13 @@ async function syncOne(
   const pl = await fetchReport(conn.realm_id, token.accessToken, "ProfitAndLoss", {
     start_date: period.start,
     end_date: period.end,
-    accounting_method: "Accrual",
+    accounting_method: method,
   });
   if (!pl.ok) return { ...base, ok: false, error: `P&L: ${pl.error}` };
 
   const bs = await fetchReport(conn.realm_id, token.accessToken, "BalanceSheet", {
     as_of: period.end,
-    accounting_method: "Accrual",
+    accounting_method: method,
   });
 
   const figures = parseProfitAndLoss(pl.report);
@@ -143,6 +158,7 @@ async function syncOne(
         scope: conn.scope,
         period_start: period.start,
         period_end: period.end,
+        accounting_method: method,
         total_income: figures.totalIncome,
         total_cogs: figures.totalCogs,
         total_expenses: figures.totalExpenses,
@@ -158,7 +174,7 @@ async function syncOne(
         fetched_at: now,
         updated_at: now,
       },
-      { onConflict: "connection_id,period_start,period_end" }
+      { onConflict: "connection_id,period_start,period_end,accounting_method" }
     )
     .select("id")
     .single();
@@ -177,7 +193,8 @@ async function syncOne(
 
 export async function syncQuickBooksFinancials(
   organizationId: string,
-  period = defaultPeriod()
+  period = defaultPeriod(),
+  method: AccountingMethod = "Accrual"
 ): Promise<FinancialsSyncResult[]> {
   const connections = await listQuickBooksConnections(organizationId);
   const results: FinancialsSyncResult[] = [];
@@ -185,7 +202,7 @@ export async function syncQuickBooksFinancials(
   for (const conn of connections) {
     if (conn.status !== "connected") continue;
     if (conn.scope !== "school" && conn.scope !== "network") continue;
-    results.push(await syncOne(organizationId, conn, period));
+    results.push(await syncOne(organizationId, conn, period, method));
   }
 
   return results;

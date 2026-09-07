@@ -3,6 +3,7 @@ import { canAccessConnectorOrganization } from "@/lib/connectors";
 import {
   defaultPeriod,
   syncQuickBooksFinancials,
+  type AccountingMethod,
 } from "@/lib/connectors/quickbooks/financials-sync";
 import { getJagPlatformSession } from "@/lib/jag-platform/server-session";
 
@@ -42,12 +43,21 @@ export async function GET(request: NextRequest) {
     end: request.nextUrl.searchParams.get("end") || fallback.end,
   };
 
-  const results = await syncQuickBooksFinancials(organizationId, period);
+  // ?basis=cash to reconcile against the filed 1120-S, which this entity files
+  // on the cash basis. Anything other than an explicit "cash" means Accrual, so
+  // a typo cannot silently change what the stored figures mean.
+  const method: AccountingMethod =
+    request.nextUrl.searchParams.get("basis")?.toLowerCase() === "cash"
+      ? "Cash"
+      : "Accrual";
+
+  const results = await syncQuickBooksFinancials(organizationId, period, method);
 
   return NextResponse.json({
     ok: results.length > 0 && results.every((r) => r.ok),
     organizationId,
     period,
+    basis: method,
     synced: results.filter((r) => r.ok).length,
     of: results.length,
     results,
