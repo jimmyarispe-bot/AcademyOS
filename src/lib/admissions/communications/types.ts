@@ -64,6 +64,23 @@ export const MERGE_FIELDS = [
   "parent_name",
   "parent_email",
   "parent_phone",
+  /**
+   * First names, plus guardian_* aliases for the parent_* fields.
+   *
+   * Added 7 Sept. Migration 294 seeded four live parent-reminder templates
+   * written against these names BEFORE they existed. `renderTemplate` leaves an
+   * unknown token in place as literal text, so three families were two days
+   * from receiving "Hi {{guardian_first_name}},". The templates were disabled;
+   * these are the fields they were always meant to use.
+   *
+   * Separate from parent_name because a greeting wants a first name — "Hi
+   * Sarah," not "Hi Sarah Whitfield,".
+   */
+  "guardian_first_name",
+  "student_first_name",
+  "guardian_name",
+  "guardian_email",
+  "guardian_phone",
   "school_name",
   "program_name",
   "campus_name",
@@ -74,6 +91,14 @@ export const MERGE_FIELDS = [
   "portal_link",
   "application_link",
   "upload_link",
+  /**
+   * Where a family finishes enrolling. Today that is the same apply portal as
+   * application_link — the enrollment packet lives there — but it is named
+   * separately because "finish your application" and "finish your enrollment"
+   * are different moments, and if they ever get different destinations the
+   * templates should not have to change.
+   */
+  "enrollment_link",
   /** The school's own Google appointment-schedule URL. */
   "scheduling_link",
   /** Shadow-days booking link. Separate calendar from tours -- see migration 247. */

@@ -66,6 +66,24 @@ function parentName(ctx: MergeContext): string {
   return name || "Family";
 }
 
+/**
+ * A greeting wants a first name. Falls back through the full name to "there"
+ * rather than to an empty string — "Hi ," is worse than slightly impersonal,
+ * and an empty greeting is the kind of thing a parent notices and a test does
+ * not.
+ */
+function guardianFirstName(ctx: MergeContext): string {
+  return ctx.guardianFirstName?.trim() || parentName(ctx).split(" ")[0] || "there";
+}
+
+function studentFirstName(ctx: MergeContext): string {
+  return (
+    ctx.preferredName?.trim() ||
+    ctx.studentFirstName?.trim() ||
+    "your student"
+  );
+}
+
 function portalLink(ctx: MergeContext): string {
   const base = resolvePublicAppOrigin();
   if (ctx.applicationId) return `${base}/apply/portal/${ctx.applicationId}`;
@@ -86,6 +104,13 @@ export function buildMergeValues(ctx: MergeContext): Record<MergeField, string> 
     parent_name: parentName(ctx),
     parent_email: ctx.guardianEmail ?? "",
     parent_phone: ctx.guardianPhone ?? "",
+    // See the note in types.ts. Live templates used these names before they
+    // existed as fields; the context has carried the values all along.
+    guardian_first_name: guardianFirstName(ctx),
+    student_first_name: studentFirstName(ctx),
+    guardian_name: parentName(ctx),
+    guardian_email: ctx.guardianEmail ?? "",
+    guardian_phone: ctx.guardianPhone ?? "",
     school_name: ctx.schoolName ?? "The Academy",
     program_name: programLabel(ctx.program),
     campus_name: ctx.campusName ?? "Main Campus",
@@ -96,6 +121,7 @@ export function buildMergeValues(ctx: MergeContext): Record<MergeField, string> 
     portal_link: portalLink(ctx),
     application_link: applicationLink(ctx),
     upload_link: uploadLink(ctx),
+    enrollment_link: portalLink(ctx),
     /**
      * Empty string rather than a placeholder when unset.
      *
