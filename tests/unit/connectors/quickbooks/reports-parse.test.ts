@@ -223,6 +223,62 @@ describe("QuickBooks report parsing", () => {
     expect(parseProfitAndLoss(withClearing).laborExpense).toBe(45561.95);
   });
 
+  it("counts an account that has both its own postings and sub-accounts", () => {
+    // The Academy FL's real payroll section, 7 September 2026. 66000 has its
+    // OWN transactions (75,213.22) as well as three sub-accounts. QuickBooks
+    // renders that as a section whose HEADER carries the parent's money.
+    //
+    // Skipping every row with children -- the rule that correctly prevents
+    // double-counting summaries -- silently dropped it. FL's labour read
+    // 72,251.20 against a true 147,464.42, and GA's read 24,641.74 against
+    // 120,392.34. An UNDER-count of roughly half, in the two entities that
+    // looked cleanest, on a figure that feeds EBITDA.
+    //
+    // Nine tests passed through that bug. This is the one that would not have.
+    const fl: QboReport = {
+      Rows: {
+        Row: [
+          {
+            type: "Section",
+            group: "Expenses",
+            Rows: {
+              Row: [
+                {
+                  type: "Section",
+                  Header: {
+                    ColData: [
+                      { value: "66000 Payroll Expenses" },
+                      { value: "75213.22" },
+                    ],
+                  },
+                  Rows: {
+                    Row: [
+                      { ColData: [{ value: "66300 Payroll Fees" }, { value: "31566.45" }] },
+                      { ColData: [{ value: "66100 Payroll Wages" }, { value: "26330.40" }] },
+                      { ColData: [{ value: "66200 Payroll Taxes" }, { value: "14354.35" }] },
+                    ],
+                  },
+                  Summary: {
+                    ColData: [
+                      { value: "Total 66000 Payroll Expenses" },
+                      { value: "147464.42" },
+                    ],
+                  },
+                },
+              ],
+            },
+            Summary: { ColData: [{ value: "Total Expenses" }, { value: "197074.06" }] },
+          },
+        ],
+      },
+    };
+
+    // Header 75,213.22 + three leaves 72,251.20 = 147,464.42, which is exactly
+    // what QuickBooks prints as the section total. Matching it proves both
+    // halves at once: the header is counted, and the Summary is not.
+    expect(parseProfitAndLoss(fl).laborExpense).toBe(147464.42);
+  });
+
   it("does not mistake interest income for interest expense", () => {
     expect(parseProfitAndLoss(PL).interestExpense).toBe(8200);
   });

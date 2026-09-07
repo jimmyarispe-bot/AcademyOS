@@ -128,10 +128,34 @@ export function sumMatchingAccounts(
   let total: number | null = null;
   const roots = subtreesOf(report, options.within);
   walk(roots, (row, ancestors) => {
-    // Leaf rows carry ColData directly and have no child Rows. Summing LEAVES
-    // ONLY is what stops a section being counted twice -- once as its own
-    // subtotal and again as its children.
-    if (!row.ColData || row.Rows?.Row?.length) return;
+    const hasChildren = Boolean(row.Rows?.Row?.length);
+
+    // WHAT COUNTS, AND WHY EACH OF THE THREE CASES EXISTS.
+    //
+    // LEAF -- an account with no sub-accounts. Its ColData carries the amount.
+    //
+    // SECTION HEADER -- in QuickBooks an account can have BOTH its own
+    // transactions AND sub-accounts. It renders as a section whose HEADER row
+    // carries the parent's own postings, with children below it and a Total
+    // that sums both. The Academy FL's books, 7 September 2026:
+    //
+    //     Total 66000 Payroll Expenses   147,464.42   <- Summary
+    //           66000 Payroll Expenses    75,213.22   <- Header, its OWN money
+    //           66300 Payroll Fees        31,566.45   <- leaf
+    //           66100 Payroll Wages       26,330.40   <- leaf
+    //           66200 Payroll Taxes       14,354.35   <- leaf
+    //
+    // Skipping every row with children lost that 75,213.22 -- FL's labour read
+    // 72,251.20 against a true 147,464.42, and GA's read 24,641.74 against
+    // 120,392.34. An UNDER-count, in the two entities that looked cleanest.
+    //
+    // SUMMARY -- never counted. It already contains the header and the leaves,
+    // so adding it would double everything. That rule stays.
+    const amount = hasChildren
+      ? amountOf(row.Header?.ColData)
+      : amountOf(row.ColData);
+    if (amount === null) return;
+
     const name = label(row);
     if (!name) return;
 
@@ -152,8 +176,6 @@ export function sumMatchingAccounts(
       ancestors.some((a) => patterns.some((p) => p.test(a)));
 
     if (!own && !inherited) return;
-    const amount = amountOf(row.ColData);
-    if (amount === null) return;
     total = (total ?? 0) + amount;
   });
   return total;
