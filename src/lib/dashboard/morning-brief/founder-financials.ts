@@ -62,6 +62,20 @@ export type FounderFinancials = {
  * structural type for exactly the call being made — the shape is asserted in one
  * place and the columns below are the contract.
  */
+type LooseConnectionsClient = {
+  from: (table: string) => {
+    select: (columns: string) => {
+      in: (
+        column: string,
+        values: string[]
+      ) => PromiseLike<{
+        data: Array<{ id: string; company_name: string | null }> | null;
+        error: { message: string } | null;
+      }>;
+    };
+  };
+};
+
 type LooseClient = {
   from: (table: string) => {
     select: (columns: string) => {
@@ -79,7 +93,13 @@ type LooseClient = {
 };
 
 type Row = {
-  company_name: string | null;
+  /**
+   * The book's identity. company_name is NOT on this table - it lives on
+   * fi_quickbooks_connections. Selecting it here returned
+   * "column fi_quickbooks_financials.company_name does not exist" and the tiles
+   * rendered that reason, which is the honest failure and how it was found.
+   */
+  connection_id: string;
   scope: string | null;
   period_start: string;
   period_end: string;
@@ -133,7 +153,7 @@ export async function getFounderFinancials(): Promise<FounderFinancials> {
   const { data, error } = await (supabase as unknown as LooseClient)
     .from("fi_quickbooks_financials")
     .select(
-      "company_name, scope, period_start, period_end, total_income, total_expenses, " +
+      "connection_id, scope, period_start, period_end, total_income, total_expenses, " +
         "net_income, depreciation, amortization, interest_expense, cash_balance"
     )
     .eq("accounting_method", METHOD)
@@ -153,13 +173,12 @@ export async function getFounderFinancials(): Promise<FounderFinancials> {
     (r) => r.period_end === latestEnd && r.period_start === latestStart
   );
 
-  const excluded: FounderFinancials["booksExcluded"] = [];
+  // Collected by id, resolved to names once at the end - the name is only
+  // needed to explain an exclusion, and most runs have none to explain.
+  const excludedIds: Array<{ connectionId: string; reason: string }> = [];
   const books = inPeriod.filter((r) => {
     if (!COUNTED_SCOPES.includes(String(r.scope))) {
-      excluded.push({
-        company: r.company_name ?? "Unnamed book",
-        reason: "not mapped to an entity",
-      });
+      excludedIds.push({ connectionId: r.connection_id, reason: "not mapped to an entity" });
       return false;
     }
     return true;
@@ -206,10 +225,25 @@ export async function getFounderFinancials(): Promise<FounderFinancials> {
       : null;
 
   for (const r of missingNetIncome) {
-    excluded.push({
-      company: r.company_name ?? "Unnamed book",
-      reason: "net income did not parse",
-    });
+    excludedIds.push({ connectionId: r.connection_id, reason: "net income did not parse" });
+  }
+
+  // Name the excluded books, if there are any. One extra round trip, only when
+  // there is something to explain.
+  let excluded: FounderFinancials["booksExcluded"] = [];
+  if (excludedIds.length) {
+    const { data: conns } = await (supabase as unknown as LooseConnectionsClient)
+      .from("fi_quickbooks_connections")
+      .select("id, company_name")
+      .in(
+        "id",
+        excludedIds.map((e) => e.connectionId)
+      );
+    const nameById = new Map((conns ?? []).map((c) => [c.id, c.company_name]));
+    excluded = excludedIds.map((e) => ({
+      company: nameById.get(e.connectionId) ?? "Unnamed book",
+      reason: e.reason,
+    }));
   }
 
   return {
