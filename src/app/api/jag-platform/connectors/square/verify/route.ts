@@ -6,13 +6,12 @@ import { getJagPlatformSession } from "@/lib/jag-platform/server-session";
 /**
  * GET /api/jag-platform/connectors/square/verify
  *
- * Proves the Square credentials work. Lists locations. Moves no money, stores
- * nothing, and cannot charge anything -- deliberately the first thing built,
- * because the alternative is discovering a credential problem with a family's
- * card in the middle of it.
+ * Proves the Square credentials work and reports which environment the token
+ * belongs to. Lists locations. Moves no money and cannot charge anything.
  *
- * Returns the location ids so SQUARE_LOCATION_ID can be set from something
- * Square actually reported rather than copied from a dashboard by hand.
+ * Requires only SQUARE_ACCESS_TOKEN. The environment is discovered rather than
+ * declared, and the location id is what this route TELLS you -- asking for it
+ * up front was asking for an answer that only this call can give.
  */
 export async function GET() {
   const session = await getJagPlatformSession();
@@ -27,10 +26,12 @@ export async function GET() {
     return NextResponse.json(
       {
         ok: false,
-        environment: cfg.environment,
-        missing: cfg.missing,
         error: result.error,
-        needsSetup: result.needsSetup,
+        triedEnvironments: result.tried,
+        hint:
+          result.tried.length > 1
+            ? "The token was rejected by both Square hosts, so it is not a valid access token for either environment. Replace SQUARE_ACCESS_TOKEN."
+            : "SQUARE_ENVIRONMENT is pinned; unset it to let the token find its own environment.",
       },
       { status: 400 }
     );
@@ -38,15 +39,15 @@ export async function GET() {
 
   return NextResponse.json({
     ok: true,
-    environment: cfg.environment,
-    // Loud, because sandbox looks exactly like production until a family's card
-    // silently does nothing.
+    environment: result.environment,
+    environmentSource: cfg.pinnedEnvironment ? "pinned by SQUARE_ENVIRONMENT" : "discovered",
     warning:
-      cfg.environment === "sandbox"
-        ? "SANDBOX. No real money moves. Set SQUARE_ENVIRONMENT=production when ready."
+      result.environment === "sandbox"
+        ? "SANDBOX TOKEN. No real money can move with this token."
         : undefined,
-    missing: cfg.missing,
+    applicationIdSet: Boolean(cfg.applicationId),
     locationIdConfigured: cfg.locationId || null,
+    setThisAsSquareLocationId: cfg.locationId ? null : result.locations[0]?.id ?? null,
     locations: result.locations,
   });
 }

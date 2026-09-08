@@ -1,29 +1,37 @@
 /**
- * Square credentials, from the environment.
+ * Square credentials.
  *
- * ONE SQUARE ACCOUNT, SO A PERSONAL ACCESS TOKEN RATHER THAN OAUTH. The
- * existing OAuth scaffolding at
- * lib/platform/integrations/connectors/square/auth.ts is for connecting THIRD
- * PARTY merchants -- and its scope list is PAYMENTS_READ, ORDERS_READ and so on,
- * every one of them read-only. It could never have charged a card no matter how
- * it was wired.
+ * SQUARE_ENVIRONMENT IS OPTIONAL, AND THAT IS THE WHOLE POINT.
  *
- * SQUARE_ENVIRONMENT FALLS BACK TO SANDBOX, deliberately and loudly. The
- * QuickBooks connector has the same shape and it is the single most dangerous
- * default in this codebase: miss the variable and everything connects, works,
- * and reports figures from a test account. For Square the failure is worse than
- * wrong numbers -- a card that appears charged and never was. So `configured`
- * is false unless the environment is stated explicitly.
+ * It was required, and it cost an hour on the evening of 7 September. The
+ * variable was set in Vercel, scoped correctly, redeployed repeatedly, and the
+ * runtime kept reporting it absent -- while SQUARE_ACCESS_TOKEN and
+ * SQUARE_APPLICATION_ID, sitting beside it, arrived fine. Six rounds of
+ * checking scopes and rebuilding never found out why.
+ *
+ * The lesson is not about Vercel. A token already knows which environment it
+ * belongs to: production tokens work against connect.squareup.com and fail
+ * against the sandbox host, and vice versa. Making a human retype that fact
+ * into a form -- correctly, in a field they cannot read back once saved -- adds
+ * a way to be wrong and no information. So the client asks Square instead.
+ *
+ * Set SQUARE_ENVIRONMENT to pin it. Leave it unset and the environment is
+ * discovered and reported back.
  */
 
 export type SquareEnvironmentName = "production" | "sandbox";
+
+export const SQUARE_HOSTS: Record<SquareEnvironmentName, string> = {
+  production: "https://connect.squareup.com",
+  sandbox: "https://connect.squareupsandbox.com",
+};
 
 export interface SquareConfig {
   readonly accessToken: string;
   readonly applicationId: string;
   readonly locationId: string;
-  readonly environment: SquareEnvironmentName;
-  readonly apiBase: string;
+  /** Null when unpinned -- the client discovers it. */
+  readonly pinnedEnvironment: SquareEnvironmentName | null;
   readonly configured: boolean;
   readonly missing: readonly string[];
 }
@@ -34,32 +42,24 @@ export function squareConfig(): SquareConfig {
   const locationId = (process.env.SQUARE_LOCATION_ID ?? "").trim();
   const declared = (process.env.SQUARE_ENVIRONMENT ?? "").trim().toLowerCase();
 
-  const environment: SquareEnvironmentName =
-    declared === "production" ? "production" : "sandbox";
+  const pinnedEnvironment: SquareEnvironmentName | null =
+    declared === "production" ? "production" : declared === "sandbox" ? "sandbox" : null;
 
+  // ONLY THE TOKEN IS REQUIRED TO VERIFY. The application id is needed by the
+  // card-capture page, and the location id by a payment -- neither blocks
+  // finding out whether the credentials work, and treating them as blockers
+  // turned a five-minute check into an evening.
   const missing: string[] = [];
   if (!accessToken) missing.push("SQUARE_ACCESS_TOKEN");
-  if (!applicationId) missing.push("SQUARE_APPLICATION_ID");
-  // Not required to verify credentials -- /v2/locations is what discovers it --
-  // but required before any payment can be taken.
-  if (!locationId) missing.push("SQUARE_LOCATION_ID");
-  if (declared !== "production" && declared !== "sandbox") {
-    missing.push("SQUARE_ENVIRONMENT (must be exactly 'production' or 'sandbox')");
-  }
 
   return {
     accessToken,
     applicationId,
     locationId,
-    environment,
-    apiBase:
-      environment === "production"
-        ? "https://connect.squareup.com"
-        : "https://connect.squareupsandbox.com",
+    pinnedEnvironment,
     configured: missing.length === 0,
     missing,
   };
 }
 
-/** Square pins its API by date; changing this changes response shapes. */
 export const SQUARE_API_VERSION = "2025-01-23";

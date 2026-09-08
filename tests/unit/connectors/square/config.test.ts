@@ -17,54 +17,43 @@ afterEach(() => {
 });
 
 describe("Square configuration", () => {
-  it("is not configured until the environment is stated explicitly", () => {
-    process.env.SQUARE_ACCESS_TOKEN = "tok";
-    process.env.SQUARE_APPLICATION_ID = "app";
-    process.env.SQUARE_LOCATION_ID = "loc";
-    delete process.env.SQUARE_ENVIRONMENT;
-
-    const cfg = squareConfig();
-
-    // THE POINT. quickbooksClientConfig() treats any value other than the
-    // literal "production" as sandbox and reports itself configured -- miss the
-    // variable and everything works while reporting test-account figures. For
-    // payments that failure is a card that appears charged and never was, so an
-    // unstated environment means NOT configured.
-    expect(cfg.configured).toBe(false);
-    expect(cfg.missing.join(" ")).toContain("SQUARE_ENVIRONMENT");
-    // It still defaults to sandbox rather than production: if something ignores
-    // `configured`, the safe side is the one where no real money moves.
-    expect(cfg.environment).toBe("sandbox");
-    expect(cfg.apiBase).toBe("https://connect.squareupsandbox.com");
-  });
-
-  it("names every missing variable at once", () => {
+  it("needs only the access token", () => {
     for (const k of KEYS) delete process.env[k];
+    process.env.SQUARE_ACCESS_TOKEN = "tok";
+
     const cfg = squareConfig();
-    expect(cfg.configured).toBe(false);
-    // All four, not just the first — one round trip per missing variable is how
-    // a five-minute setup becomes an afternoon.
-    expect(cfg.missing).toHaveLength(4);
+
+    // THE POINT, learned the hard way on 7 September. Requiring
+    // SQUARE_ENVIRONMENT cost an evening: it was set in Vercel, scoped
+    // correctly and redeployed repeatedly, while the variables beside it
+    // arrived fine and it did not. A token already knows its own environment
+    // and Square will say so, and asking a person to retype that into a field
+    // they cannot read back adds a way to be wrong and no information.
+    expect(cfg.configured).toBe(true);
+    expect(cfg.missing).toHaveLength(0);
+    expect(cfg.pinnedEnvironment).toBeNull();
   });
 
-  it("points at production only on the exact string", () => {
+  it("says what is missing when the token is absent", () => {
+    for (const k of KEYS) delete process.env[k];
+    expect(squareConfig()).toMatchObject({
+      configured: false,
+      missing: ["SQUARE_ACCESS_TOKEN"],
+    });
+  });
+
+  it("pins the environment only on an exact value", () => {
     process.env.SQUARE_ACCESS_TOKEN = "tok";
-    process.env.SQUARE_APPLICATION_ID = "app";
-    process.env.SQUARE_LOCATION_ID = "loc";
 
     process.env.SQUARE_ENVIRONMENT = "production";
-    expect(squareConfig()).toMatchObject({
-      configured: true,
-      environment: "production",
-      apiBase: "https://connect.squareup.com",
-    });
+    expect(squareConfig().pinnedEnvironment).toBe("production");
 
-    // Near misses are sandbox, not production. "Production" with a capital P
-    // is accepted (case-insensitive); "prod" is not.
-    process.env.SQUARE_ENVIRONMENT = "Production";
-    expect(squareConfig().environment).toBe("production");
+    process.env.SQUARE_ENVIRONMENT = "  Sandbox  ";
+    expect(squareConfig().pinnedEnvironment).toBe("sandbox");
 
+    // Anything else is not an error any more -- it simply means "unpinned",
+    // and the client discovers the environment instead of refusing to start.
     process.env.SQUARE_ENVIRONMENT = "prod";
-    expect(squareConfig()).toMatchObject({ environment: "sandbox", configured: false });
+    expect(squareConfig()).toMatchObject({ pinnedEnvironment: null, configured: true });
   });
 });
