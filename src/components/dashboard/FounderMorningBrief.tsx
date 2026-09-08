@@ -1,5 +1,9 @@
 import Link from "next/link";
 import { getFounderBrief, type CampusLine } from "@/lib/dashboard/morning-brief/founder-brief-data";
+import {
+  getFounderFinancials,
+  type FounderFinancials,
+} from "@/lib/dashboard/morning-brief/founder-financials";
 
 /**
  * Founder Morning Brief — revenue-first homepage.
@@ -54,14 +58,105 @@ function Tile({
   );
 }
 
+/** "Jan – Aug 2026", or the raw dates if either fails to parse. */
+function periodLabel(startIso: string, endIso: string): string {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return `${startIso} – ${endIso}`;
+  }
+  const m = (d: Date) => d.toLocaleDateString("en-US", { month: "short" });
+  return start.getFullYear() === end.getFullYear()
+    ? `${m(start)} – ${m(end)} ${end.getFullYear()}`
+    : `${m(start)} ${start.getFullYear()} – ${m(end)} ${end.getFullYear()}`;
+}
+
+/**
+ * The two tiles that were "Not connected" until 2026-09-08.
+ *
+ * Every branch that cannot show a number shows the REASON instead, never a
+ * zero. A $0 EBITDA reads as a business result; "No accrual figures synced yet"
+ * reads as what it is.
+ */
+function ebitdaTile(fin: FounderFinancials) {
+  if (fin.unavailable) {
+    return { value: "Not connected", sub: fin.unavailable, accent: "pending" as const };
+  }
+  if (fin.ebitda == null) {
+    const who = fin.booksExcluded.map((b) => b.company).join(", ");
+    return {
+      value: "Incomplete",
+      sub: `Net income did not parse for ${who || "one or more books"}`,
+      accent: "pending" as const,
+    };
+  }
+  const period = periodLabel(fin.periodStart, fin.periodEnd);
+  const books = `${fin.booksIncluded} book${fin.booksIncluded === 1 ? "" : "s"}`;
+  return {
+    value: money(fin.ebitda),
+    sub: `Accrual · ${books} · ${period}`,
+    accent: fin.ebitda >= 0 ? ("positive" as const) : undefined,
+  };
+}
+
+function cashTile(fin: FounderFinancials) {
+  if (fin.unavailable) {
+    return { value: "Not connected", sub: fin.unavailable, accent: "pending" as const };
+  }
+  if (fin.cash == null) {
+    return {
+      value: "Not connected",
+      sub: "No balance sheet came back from any book",
+      accent: "pending" as const,
+    };
+  }
+
+  // The runway half is a separate claim from the cash half, and it is stated
+  // separately. A profitable period has no runway to report — saying so is not
+  // the same as failing to compute one.
+  const runway =
+    fin.runwayMonths != null
+      ? `${fin.runwayMonths.toFixed(1)} months at current burn`
+      : fin.monthlyBurn == null
+        ? "Profitable this period — no burn"
+        : "Runway needs a positive cash balance";
+
+  const caveat =
+    fin.cashBooksMissing > 0
+      ? ` · ${fin.cashBooksMissing} book${fin.cashBooksMissing === 1 ? "" : "s"} missing a balance sheet`
+      : "";
+
+  return {
+    value: money(fin.cash),
+    sub: `${runway}${caveat}`,
+    accent: fin.cash >= 0 ? ("positive" as const) : undefined,
+  };
+}
+
 function campusSubtitle(c: CampusLine): string {
   if (c.annualTuition == null) return "No tuition set";
   return `${money(c.annualTuition)} per year`;
 }
 
 export async function FounderMorningBrief({ orgName }: { orgName: string }) {
-  const brief = await getFounderBrief();
-  const { campuses, totals, tasks, missing } = brief;
+  const [brief, fin] = await Promise.all([getFounderBrief(), getFounderFinancials()]);
+  const { campuses, totals, tasks } = brief;
+
+  const ebitda = ebitdaTile(fin);
+  const cash = cashTile(fin);
+
+  // The gap list is what the platform does not hold. Once the books are
+  // connected, payroll/costs and the cash balance are held - leaving them
+  // listed would tell the founder to go and connect something already done.
+  const resolved = fin.unavailable
+    ? new Set<string>()
+    : new Set(
+        [
+          fin.ebitda != null ? "Payroll and operating costs" : null,
+          fin.cash != null ? "Cash balance" : null,
+        ].filter(Boolean) as string[]
+      );
+  const missing = brief.missing.filter((m) => !resolved.has(m));
 
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -120,8 +215,8 @@ export async function FounderMorningBrief({ orgName }: { orgName: string }) {
             value={String(totals.pipelineOpen)}
             sub="Families not yet declined"
           />
-          <Tile label="Adjusted EBITDA" value="Not connected" sub="Needs payroll and costs" accent="pending" />
-          <Tile label="Cash &amp; runway" value="Not connected" sub="Needs a ledger connection" accent="pending" />
+          <Tile label="Adjusted EBITDA" value={ebitda.value} sub={ebitda.sub} accent={ebitda.accent} />
+          <Tile label="Cash &amp; runway" value={cash.value} sub={cash.sub} accent={cash.accent} />
         </div>
       </Card>
 
@@ -284,8 +379,7 @@ export async function FounderMorningBrief({ orgName }: { orgName: string }) {
         <div className="px-5 py-4">
           <h2 className="text-sm font-semibold text-slate-900">To finish this brief</h2>
           <p className="mt-1 text-xs text-slate-500">
-            EBITDA, margin, discount rate and capacity stay blank until these exist. Nothing here is
-            estimated.
+            These stay blank until they exist. Nothing here is estimated.
           </p>
           <ul className="mt-3 flex flex-wrap gap-2">
             {missing.map((m) => (
