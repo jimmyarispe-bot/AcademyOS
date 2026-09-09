@@ -18,6 +18,7 @@ import {
 import { StatCard } from "@/components/dashboard/StatCard";
 import { ViewTabs } from "@/components/ui/ViewTabs";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { IntelligenceLink } from "@/components/ui/IntelligenceLink";
 import { FundingBreakdown } from "@/components/ui/FundingBreakdown";
 import { StudentList } from "@/components/students/StudentList";
 import { FamilyList } from "@/components/students/FamilyList";
@@ -127,6 +128,12 @@ async function StudentsLegacyView({
             ← Work queue
           </Link>
         }
+      />
+      <IntelligenceLink
+        title="What does each student earn and cost?"
+        description="Student Economics reads the QuickBooks books and the tuition ledger — tuition, scholarships, ESA funding and net contribution for every child, per campus."
+        href="/dashboard/finance/intelligence?view=students"
+        linkLabel="Open Student Economics"
       />
       <WidgetBoundary
         label="Student KPIs"

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { IntelligenceLink } from "@/components/ui/IntelligenceLink";
 import { FamilyDashboard } from "@/components/families/FamilyDashboard";
 import { getIdentityContext } from "@/lib/platform/identity/context";
 import {
@@ -66,6 +67,12 @@ export default async function FamiliesPage({ searchParams }: FamiliesPageProps) 
             </Link>
           </div>
         }
+      />
+      <IntelligenceLink
+        title="Which families carry the revenue?"
+        description="Family Analytics reads billing and the QuickBooks books together — what each household is billed, what has arrived, and where the balances sit."
+        href="/dashboard/finance/intelligence?view=families"
+        linkLabel="Open Family Analytics"
       />
       <Suspense fallback={<p className="text-sm text-slate-500">Loading families…</p>}>
         <FamilyDashboard

@@ -21,6 +21,7 @@ import { KanbanBoard } from "@/components/admissions/KanbanBoard";
 import { LeadList } from "@/components/admissions/LeadList";
 import { ViewTabs } from "@/components/ui/ViewTabs";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { IntelligenceLink } from "@/components/ui/IntelligenceLink";
 import { formatCount } from "@/lib/format";
 import {
   getExecutiveAdmissionsMetrics,
@@ -216,6 +217,16 @@ export async function AdmissionsPageContent({ searchParams }: AdmissionsPageCont
       }
     >
       {orgContext && <JagOrganizationContextBar org={orgContext} />}
+      {/* The work panel shows what is in front of you today. It does not show
+          the funnel, the conversion rates, or the families who have been
+          waiting since February - those live one route away and nothing here
+          pointed at them. */}
+      <IntelligenceLink
+        title="Who is waiting, and what is the funnel doing?"
+        description="The waiting list ranks every open task by how long a family has been left — longest first, by campus, with the parent's phone number. Executive Admissions carries conversion and stage analysis."
+        href="/dashboard/admissions/waiting"
+        linkLabel="Families waiting on us"
+      />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard title="Work in queue" value={formatCount(activeItems.length)} description={perspectiveLabel} accent="brand" icon={<span className="text-lg font-bold">W</span>} />
         <MetricCard title="Active pipeline" value={formatCount(leads.filter((l) => !["enrolled", "declined"].includes(l.lead_stage)).length)} description="Open cases" accent="indigo" icon={<span className="text-lg font-bold">P</span>} />

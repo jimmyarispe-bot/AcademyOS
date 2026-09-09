@@ -18,6 +18,7 @@ import { StatCard } from "@/components/dashboard/StatCard";
 import { HrTabs } from "@/components/hr/HrTabs";
 import { ViewTabs } from "@/components/ui/ViewTabs";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { IntelligenceLink } from "@/components/ui/IntelligenceLink";
 import { formatCount } from "@/lib/format";
 import {
   computeHrStats,
@@ -97,6 +98,15 @@ async function HrLegacyView({ view, ctx }: { view: string; ctx: NonNullable<Awai
           </Link>
         </div>
       </div>
+      {/* $140,236 of contractor pay across 16 people went through Zelle in 2026
+          and no screen in this module shows it. The books do. */}
+      <IntelligenceLink
+        title="What is the workforce actually costing?"
+        description="Teacher and contractor pay, per campus, straight from the QuickBooks books — including the contractors paid outside payroll who do not appear on any roster here."
+        href="/dashboard/finance/intelligence?view=teachers"
+        linkLabel="Open Teacher Profitability"
+        caveat="Contractors paid by Zelle are not employees and do not appear in the tabs below. In 2026 that is $140,236 across 16 people at Virtual and HS alone."
+      />
       <ViewTabs tabs={[...HR_TABS]} activeView={view} />
       {view === "operations" ? (
         <HcmOperationsDashboard summary={hcmSummary} canEdit={canEditHcm(ctx)} />
