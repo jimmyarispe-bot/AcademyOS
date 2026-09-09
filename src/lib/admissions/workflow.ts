@@ -197,20 +197,64 @@ export async function transitionLeadStage(
   return { success: true };
 }
 
+/**
+ * Open a lead's life: record the first stage, and create the first task.
+ *
+ * WHY THE TASK IS HERE. Every later stage change runs through
+ * `createStageAutomatedTasks`, which reads the registry and opens the staff
+ * follow-up for the stage being entered. The opening stage never did, because
+ * arriving at `new_inquiry` is not a transition — nothing calls the builder. So
+ * a brand-new family was written to `admissions_leads`, mailed a welcome, and
+ * then existed with no open task at all: invisible on "Families waiting on us",
+ * which lists open tasks. That is precisely the shape of the 113 families parked
+ * at `information_sent` since 2 February with no task between them, and from
+ * the day the public inquiry URLs go on the school websites it would apply to
+ * every parent who fills in the form.
+ *
+ * The task itself is not invented here. The registry has always defined it —
+ * pipeline stage `inquiry`, "Request interest meeting", due in 2 days. The
+ * intent was recorded; only the call was missing.
+ *
+ * ERRORS ARE RETURNED *AND* LOGGED. Three call sites await this function and
+ * ignore what it returns, and supabase-js resolves an RLS refusal rather than
+ * throwing — the house failure pattern, six instances and counting. Returning
+ * the errors lets a caller act on them; logging them here means that until a
+ * caller does, a refusal is still visible in the Vercel logs instead of
+ * vanishing. A new family with no task is exactly the silence this fixes.
+ */
 export async function recordInitialStage(
   supabase: AuthClient,
   leadId: string,
   changedBy: string | null
-) {
+): Promise<{ error?: string; taskError?: string }> {
   const now = new Date().toISOString();
 
-  await supabase.from("admissions_lead_stage_history").insert({
-    lead_id: leadId,
-    previous_stage: null,
-    new_stage: "new_inquiry",
-    changed_by: changedBy,
-    changed_at: now,
-  });
+  const { error: historyError } = await supabase
+    .from("admissions_lead_stage_history")
+    .insert({
+      lead_id: leadId,
+      previous_stage: null,
+      new_stage: "new_inquiry",
+      changed_by: changedBy,
+      changed_at: now,
+    });
+
+  if (historyError) {
+    console.error("[recordInitialStage] stage history", { leadId, error: historyError.message });
+  }
+
+  // The lead must still get its task even if history failed. History is a
+  // record of what happened; the task is what makes somebody act.
+  const { error: taskError } = await createStageAutomatedTasks(supabase, leadId, "new_inquiry");
+
+  if (taskError) {
+    console.error("[recordInitialStage] opening task", { leadId, error: taskError });
+  }
+
+  return {
+    error: historyError?.message,
+    taskError,
+  };
 }
 
 export interface StageDurationStats {
