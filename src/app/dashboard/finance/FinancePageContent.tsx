@@ -17,6 +17,7 @@ import { FinanceTabs } from "@/components/finance/FinanceTabs";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { ViewTabs } from "@/components/ui/ViewTabs";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { IntelligenceLink } from "@/components/ui/IntelligenceLink";
 import { formatCount, formatCurrency } from "@/lib/format";
 import {
   getBillingAccounts,
@@ -101,6 +102,19 @@ async function FinanceLegacyView({ view }: { view: string }) {
           </Link>
         }
       />
+      {/* Finance & Billing reports on invoices JAG has issued, and JAG has issued
+          none - Square does the billing - so every tile below reads $0. That is
+          accurate and it is also the single most misleading screen in the
+          product, because it is where a founder looks first for money. The real
+          books are one click away and were previously unreachable from here. */}
+      <IntelligenceLink
+        title="Looking for revenue, EBITDA or cash?"
+        description="Financial Intelligence reads the QuickBooks books — real income, margin and bank balance for each campus, and a consolidated view of the whole network."
+        href="/dashboard/finance/intelligence"
+        linkLabel="Open Financial Intelligence"
+        caveat="The tiles on this page count invoices raised inside JAG. Square does your billing, so they read $0 — that is the tool telling the truth about itself, not a network with no income."
+      />
+
       {(view === "operations" || view === "accounts") && (
         <FinanceOperationsDashboard
           summary={opsSummary}

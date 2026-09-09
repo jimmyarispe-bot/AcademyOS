@@ -35,6 +35,8 @@ import { createAuthClient } from "@/lib/supabase/server-auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ActionChip, ActionChipGroup } from "@/components/experience-system/feedback/ActionChip";
+import { NetworkOverview } from "@/components/financial-intelligence/NetworkOverview";
+import { getNetworkQuickBooksFigures } from "@/lib/financial-intelligence/quickbooks-financials";
 
 interface IntelligencePageContentProps {
   searchParams: Promise<{ view?: string; school?: string }>;
@@ -66,7 +68,18 @@ export async function IntelligencePageContent({ searchParams }: IntelligencePage
    * bookmark or send on, and the name is on the page either way.
    */
   const supabase = await createAuthClient();
-  const schoolId = resolvePrimarySchoolId(ctx, requestedSchool);
+
+  /**
+   * "network" is a sentinel, not a school id. It consolidates every QuickBooks
+   * book rather than summing the campuses — the four schools made $265,876 to
+   * 7 September 2026 while the network made −$12,031, and only one of those is
+   * the business. Restricted users do not get it: it would show them books they
+   * cannot otherwise see.
+   */
+  const wantsNetwork = requestedSchool === "network" && ctx.hasUnrestrictedSchoolAccess;
+  const network = wantsNetwork ? await getNetworkQuickBooksFigures(supabase) : null;
+
+  const schoolId = resolvePrimarySchoolId(ctx, wantsNetwork ? undefined : requestedSchool);
   if (!schoolId) redirect("/dashboard");
 
   // Unrestricted roles carry an EMPTY accessibleSchoolIds — the encoding for
@@ -118,8 +131,12 @@ export async function IntelligencePageContent({ searchParams }: IntelligencePage
             belongs to one school, and a page of money that does not say whose
             money it is invites exactly the wrong conclusion. */}
         <PageHeader
-          title={`Financial Intelligence · ${currentSchoolName}`}
-          subtitle="Profitability, forecasting, scenarios and executive analytics — for this campus only, before network costs"
+          title={`Financial Intelligence · ${wantsNetwork ? "Network" : currentSchoolName}`}
+          subtitle={
+            wantsNetwork
+              ? "Every QuickBooks book consolidated — campuses, the parent entity, and anything else on the books"
+              : "Profitability, forecasting, scenarios and executive analytics — for this campus only, before network costs"
+          }
         />
         <ActionChipGroup>
           <ActionChip href="/dashboard/finance" size="sm">Finance</ActionChip>
@@ -130,13 +147,26 @@ export async function IntelligencePageContent({ searchParams }: IntelligencePage
 
       {selectableSchools.length > 1 ? (
         <nav className="flex flex-wrap gap-2" aria-label="Campus">
+          {ctx.hasUnrestrictedSchoolAccess ? (
+            <Link
+              href="/dashboard/finance/intelligence?view=overview&school=network"
+              aria-current={wantsNetwork ? "page" : undefined}
+              className={
+                wantsNetwork
+                  ? "rounded-lg border border-brand-300 bg-brand-100 px-3 py-1.5 text-xs font-semibold text-brand-800"
+                  : "rounded-lg border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-50"
+              }
+            >
+              Network
+            </Link>
+          ) : null}
           {selectableSchools.map((s) => (
             <Link
               key={s.id}
               href={`/dashboard/finance/intelligence?view=${view}&school=${s.id}`}
-              aria-current={s.id === schoolId ? "page" : undefined}
+              aria-current={!wantsNetwork && s.id === schoolId ? "page" : undefined}
               className={
-                s.id === schoolId
+                !wantsNetwork && s.id === schoolId
                   ? "rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700"
                   : "rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
               }
@@ -147,6 +177,18 @@ export async function IntelligencePageContent({ searchParams }: IntelligencePage
         </nav>
       ) : null}
 
+      {network ? (
+        network.ok ? (
+          <NetworkOverview figures={network.figures} />
+        ) : (
+          /* The reason, never a zero. A consolidated figure nobody can trace is
+             worse than a stated gap - that is the whole lesson of this file. */
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {network.reason}
+          </div>
+        )
+      ) : (
+        <>
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard title="EBITDA" value={formatCurrency(executive.ebitda)} description="School-level contribution" accent="emerald" icon={<span className="font-bold">E</span>} />
         {/* The margin is shown only when it came off a real QuickBooks report.
@@ -191,6 +233,8 @@ export async function IntelligencePageContent({ searchParams }: IntelligencePage
         <ScenarioPanel scenarios={scenarios} latestResult={latestResult} schoolId={schoolId} />
       )}
       {view === "import" && <ImportPanel schoolId={schoolId} />}
+        </>
+      )}
     </div>
   );
 }

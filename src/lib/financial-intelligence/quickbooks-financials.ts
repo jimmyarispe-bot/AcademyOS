@@ -105,6 +105,136 @@ export type QuickBooksLookup =
   | { ok: true; figures: SchoolQuickBooksFigures }
   | { ok: false; reason: string };
 
+/** One QuickBooks book in the network view. */
+export type NetworkBook = {
+  connectionId: string;
+  company: string;
+  /** school | network | entity | unassigned. `entity` is a real book that is not a JAG school. */
+  scope: string;
+  schoolId: string | null;
+  totalIncome: number;
+  totalExpenses: number;
+  netIncome: number;
+  cash: number | null;
+};
+
+export type NetworkFigures = {
+  periodStart: string;
+  periodEnd: string;
+  books: NetworkBook[];
+  /** Books excluded because their period does not match the latest one. */
+  booksSkipped: number;
+  totalIncome: number;
+  totalExpenses: number;
+  netIncome: number;
+  cash: number | null;
+};
+
+export type NetworkLookup =
+  | { ok: true; figures: NetworkFigures }
+  | { ok: false; reason: string };
+
+type LooseAllConnections = {
+  from: (table: string) => {
+    select: (columns: string) => PromiseLike<{
+      data: Array<{
+        id: string;
+        company_name: string | null;
+        scope: string | null;
+        school_id: string | null;
+      }> | null;
+      error: { message: string } | null;
+    }>;
+  };
+};
+
+/**
+ * Every book in the network, consolidated.
+ *
+ * THIS IS THE WHOLE BUSINESS, NOT THE SUM OF THE CAMPUSES. The four schools
+ * together made $265,876 to 7 September 2026. The consolidated position over
+ * the same period is −$12,031, because the parent entity spent $309,138 and is
+ * not a campus. Showing only the campuses would answer a question nobody asked
+ * and flatter the answer by a quarter of a million dollars.
+ *
+ * So this includes every scope — school, network, entity (The Academy NJ,
+ * closed but still holding $248,116 of cash) and unassigned — and the view
+ * lists them so it is visible what "network" is made of rather than asserted.
+ */
+export async function getNetworkQuickBooksFigures(
+  supabase: Awaited<ReturnType<typeof createAuthClient>>
+): Promise<NetworkLookup> {
+  const { data: conns, error: connError } = await (supabase as unknown as LooseAllConnections)
+    .from("fi_quickbooks_connections")
+    .select("id, company_name, scope, school_id");
+
+  if (connError) return { ok: false, reason: `QuickBooks connection read failed: ${connError.message}` };
+
+  const connections = conns ?? [];
+  if (!connections.length) return { ok: false, reason: "No QuickBooks company files are connected" };
+
+  const { data, error } = await (supabase as unknown as LooseFinancials)
+    .from("fi_quickbooks_financials")
+    .select(
+      "connection_id, period_start, period_end, total_income, total_expenses, net_income, cash_balance"
+    )
+    .eq("accounting_method", METHOD)
+    .in(
+      "connection_id",
+      connections.map((c) => c.id)
+    )
+    .order("period_end", { ascending: false });
+
+  if (error) return { ok: false, reason: `Ledger read failed: ${error.message}` };
+
+  const rows = data ?? [];
+  if (!rows.length) return { ok: false, reason: "No accrual figures have been synced yet" };
+
+  const periodEnd = rows[0].period_end;
+  const periodStart = rows.find((r) => r.period_end === periodEnd)?.period_start ?? "";
+  const inPeriod = rows.filter((r) => r.period_end === periodEnd && r.period_start === periodStart);
+
+  if (inPeriod.some((r) => r.net_income == null)) {
+    return { ok: false, reason: "A QuickBooks report did not parse — net income is missing from one book" };
+  }
+
+  const byId = new Map(connections.map((c) => [c.id, c]));
+
+  const books: NetworkBook[] = inPeriod.map((r) => {
+    const c = byId.get(r.connection_id);
+    return {
+      connectionId: r.connection_id,
+      company: c?.company_name ?? "Unnamed book",
+      scope: c?.scope ?? "unassigned",
+      schoolId: c?.school_id ?? null,
+      totalIncome: r.total_income ?? 0,
+      totalExpenses: r.total_expenses ?? 0,
+      netIncome: r.net_income ?? 0,
+      cash: r.cash_balance,
+    };
+  });
+
+  // Largest contribution first, so the parent's deficit is impossible to miss.
+  books.sort((a, b) => b.netIncome - a.netIncome);
+
+  const sum = (pick: (b: NetworkBook) => number) => books.reduce((a, b) => a + pick(b), 0);
+  const cashBooks = books.filter((b) => b.cash != null);
+
+  return {
+    ok: true,
+    figures: {
+      periodStart,
+      periodEnd,
+      books,
+      booksSkipped: rows.length - inPeriod.length,
+      totalIncome: sum((b) => b.totalIncome),
+      totalExpenses: sum((b) => b.totalExpenses),
+      netIncome: sum((b) => b.netIncome),
+      cash: cashBooks.length ? cashBooks.reduce((a, b) => a + (b.cash ?? 0), 0) : null,
+    },
+  };
+}
+
 export async function getSchoolQuickBooksFigures(
   supabase: Awaited<ReturnType<typeof createAuthClient>>,
   schoolId: string
