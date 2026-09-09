@@ -42,6 +42,7 @@ export const ADMISSIONS_TABS = [
 ] as const;
 
 const SUB_NAV = [
+  { href: "/dashboard/admissions/waiting", label: "Waiting on us" },
   { href: "/dashboard/admissions/automation", label: "Automation" },
   { href: "/dashboard/admissions/workflows", label: "Workflows" },
   { href: "/dashboard/admissions/communications", label: "Templates" },
