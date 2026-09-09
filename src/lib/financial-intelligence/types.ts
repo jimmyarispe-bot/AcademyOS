@@ -98,6 +98,17 @@ export interface FamilyAnalyticsRow {
   collectionRisk: FiHealthIndicator;
 }
 
+/**
+ * Where the expense side of a school's figures came from.
+ *
+ * Until 9 September 2026 there was no such thing: payroll and expenses were two
+ * constants applied to revenue, which made every margin on this row identical
+ * for every school on every run. A reader could not tell a measurement from a
+ * formula, because they looked the same. `basis` is what makes that visible, and
+ * `basisNote` carries the reason when there is nothing real to show.
+ */
+export type FiFinancialsBasis = "quickbooks" | "unavailable";
+
 export interface SchoolFinancialsRow {
   schoolId: string;
   revenue: number;
@@ -112,6 +123,13 @@ export interface SchoolFinancialsRow {
   revenuePerClassroom: number;
   revenuePerTeacher: number;
   healthIndicator: FiHealthIndicator;
+  /** "quickbooks" means every figure below revenue came off a real report. */
+  basis: FiFinancialsBasis;
+  /** Why there are no figures, when basis is "unavailable". Render this instead of a margin. */
+  basisNote: string | null;
+  /** The QuickBooks period these figures cover. Null when basis is "unavailable". */
+  periodStart: string | null;
+  periodEnd: string | null;
 }
 
 export interface ScenarioInput {

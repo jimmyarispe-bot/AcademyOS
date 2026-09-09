@@ -106,7 +106,21 @@ export async function IntelligencePageContent({ searchParams }: IntelligencePage
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard title="EBITDA" value={formatCurrency(executive.ebitda)} description="School-level contribution" accent="emerald" icon={<span className="font-bold">E</span>} />
-        <StatCard title="Revenue" value={formatCurrency(school.revenue)} description={`${school.operatingMargin.toFixed(1)}% operating margin`} accent="indigo" icon={<span className="font-bold">R</span>} />
+        {/* The margin is shown only when it came off a real QuickBooks report.
+            Until 9 Sep 2026 this read "27.0% operating margin" for every school
+            on every run, because payroll and expenses were two constants applied
+            to revenue. A named gap is worth more than a number nobody can trace. */}
+        <StatCard
+          title="Revenue"
+          value={formatCurrency(school.revenue)}
+          description={
+            school.basis === "quickbooks"
+              ? `${school.operatingMargin.toFixed(1)}% operating margin · ${school.periodStart} to ${school.periodEnd}`
+              : (school.basisNote ?? "No margin — the books are not connected")
+          }
+          accent="indigo"
+          icon={<span className="font-bold">R</span>}
+        />
         <StatCard title="Below break-even" value={String(executive.classesBelowBreakeven)} description="Classes needing enrollment" accent="amber" icon={<span className="font-bold">!</span>} />
         <StatCard title="Financial risks" value={String(executive.financialRisks)} description="Active FI alerts" accent="rose" icon={<span className="font-bold">⚠</span>} />
       </section>

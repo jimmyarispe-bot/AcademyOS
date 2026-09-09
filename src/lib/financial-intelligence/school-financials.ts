@@ -2,6 +2,7 @@ import type { createAuthClient } from "@/lib/supabase/server-auth";
 import type { SchoolFinancialsRow } from "@/lib/financial-intelligence/types";
 import { healthFromMargin } from "@/lib/financial-intelligence/types";
 import { getFinanceExecutiveDashboard } from "@/lib/finance/dashboards";
+import { getSchoolQuickBooksFigures } from "@/lib/financial-intelligence/quickbooks-financials";
 
 type AuthClient = Awaited<ReturnType<typeof createAuthClient>>;
 
@@ -68,24 +69,40 @@ export async function computeSchoolFinancials(
     loadCashCollected(supabase, schoolId, yearStart),
   ]);
 
-  const revenue = dashboard.totalCollected;
-  // PLACEHOLDERS, NOT MEASUREMENTS.
-  // Nothing in this codebase reads an actual expense, so payroll and expenses
-  // are two constants applied to revenue. The arithmetic below therefore makes
-  // ebitda always exactly 27% of revenue, operatingMargin always 27.0,
-  // netMargin always 22.95, and healthFromMargin(22.95) always "green" -- for
-  // every school, every night, regardless of how the school is doing.
-  //
-  // Real figures come from QuickBooks: one company file per school, exported as
-  // Transaction Detail by Account. fi_external_transactions is the table an
-  // import lands in; as of 7 Sept 2026 it has two writers and no readers, so
-  // importing changes nothing yet. Until a reader exists, every margin on this
-  // row is decoration and should not be quoted to anyone.
-  const payroll = revenue * 0.45;
-  const expenses = payroll + revenue * 0.28;
-  const ebitda = revenue - expenses;
-  const operatingMargin = revenue ? ((revenue - expenses) / revenue) * 100 : 0;
-  const netMargin = operatingMargin * 0.85;
+  /**
+   * WHAT USED TO BE HERE:
+   *
+   *     const payroll  = revenue * 0.45;
+   *     const expenses = payroll + revenue * 0.28;
+   *
+   * Two constants, so ebitda was always exactly 27% of revenue,
+   * operatingMargin always 27.0, netMargin always 22.95, and
+   * healthFromMargin(22.95) always "green" -- for every school, every night,
+   * however the school was actually doing. The dashboard rendered those as
+   * measurements for as long as this file has existed.
+   *
+   * Now the expense side comes off the QuickBooks books, on accrual, per school.
+   * WHEN THERE ARE NO REAL FIGURES THIS ROW REPORTS NONE. It does not fall back
+   * to a formula: a plausible number nobody can trace is worse than a visible
+   * gap, because nothing about it invites a second look. `basisNote` carries the
+   * reason and the UI renders that in place of a margin.
+   */
+  const qb = await getSchoolQuickBooksFigures(supabase, schoolId);
+
+  // Revenue still comes from the billing dashboard when QuickBooks has nothing,
+  // because cash collected is a real measurement in its own right. Everything
+  // below revenue needs the books.
+  const revenue = qb.ok ? qb.figures.totalIncome : dashboard.totalCollected;
+  const expenses = qb.ok ? qb.figures.totalExpenses : 0;
+  const ebitda = qb.ok ? qb.figures.netIncome : 0;
+
+  // Payroll is NOT broken out by the QuickBooks summary this table stores, so it
+  // is reported as 0 rather than estimated from expenses. The Transaction Detail
+  // has it account by account; that is a separate reader, not a guess made here.
+  const payroll = 0;
+
+  const operatingMargin = qb.ok && revenue ? (ebitda / revenue) * 100 : 0;
+  const netMargin = operatingMargin;
   const enc = enrollment ?? 1;
 
   const row: SchoolFinancialsRow = {
@@ -101,21 +118,41 @@ export async function computeSchoolFinancials(
     revenuePerStudent: revenue / enc,
     revenuePerClassroom: sections ? revenue / sections : revenue,
     revenuePerTeacher: teachers ? revenue / teachers : revenue,
-    healthIndicator: healthFromMargin(netMargin),
+    // A school with no books has no health to report. "yellow" says "unknown"
+    // rather than the "green" the old constants produced unconditionally.
+    healthIndicator: qb.ok ? healthFromMargin(netMargin) : "yellow",
+    basis: qb.ok ? "quickbooks" : "unavailable",
+    basisNote: qb.ok ? null : qb.reason,
+    periodStart: qb.ok ? qb.figures.periodStart : null,
+    periodEnd: qb.ok ? qb.figures.periodEnd : null,
   };
 
-  await supabase.from("fi_profitability_snapshots").upsert(
+  /**
+   * NO BOOKS, NO SNAPSHOT. Writing zeros into fi_profitability_snapshots would
+   * put the same untraceable figures into a table other things read, which is
+   * how the 27.0% margin travelled in the first place. A school with no
+   * QuickBooks data leaves last night's row alone and says why in the log.
+   */
+  if (!qb.ok) {
+    console.warn("[computeSchoolFinancials] no snapshot written", { schoolId, reason: qb.reason });
+    return row;
+  }
+
+  const { error: snapshotError } = await supabase.from("fi_profitability_snapshots").upsert(
     {
       school_id: schoolId,
       entity_type: "school",
       entity_id: schoolId,
       entity_key: schoolId,
       period_type: "annual",
-      period_start: yearStart,
-      period_end: new Date().toISOString().split("T")[0],
+      period_start: qb.figures.periodStart || yearStart,
+      period_end: qb.figures.periodEnd,
       revenue,
       total_cost: expenses,
-      gross_margin: revenue - payroll,
+      // The QuickBooks summary does not break payroll out of expenses, so there
+      // is no gross margin to report distinct from the net. Both carry the same
+      // figure rather than one of them carrying an invented split.
+      gross_margin: ebitda,
       net_margin: ebitda,
       ebitda_contribution: ebitda,
       margin_pct: netMargin,
@@ -125,10 +162,25 @@ export async function computeSchoolFinancials(
         cash_flow: cashFlow,
         revenue_per_student: row.revenuePerStudent,
         collection_rate: dashboard.collectionRate,
+        basis: "quickbooks-accrual",
+        books_used: qb.figures.booksUsed,
+        books_skipped_wrong_period: qb.figures.booksSkipped,
+        quickbooks_cash: qb.figures.cash,
+        payroll_note: "not broken out by the QuickBooks summary; see Transaction Detail",
       },
     },
     { onConflict: "school_id,entity_type,entity_id,entity_key,period_type,period_start" }
   );
+
+  // Check the returned error. An RLS refusal here resolves rather than throws,
+  // and a snapshot that silently never wrote is indistinguishable from one that
+  // did until somebody reads the table weeks later.
+  if (snapshotError) {
+    console.error("[computeSchoolFinancials] snapshot write failed", {
+      schoolId,
+      error: snapshotError.message,
+    });
+  }
 
   return row;
 }
