@@ -1,3 +1,4 @@
+import { createStageAutomatedTasks } from "@/lib/admissions/workflow";
 import { recordActivity } from "@/lib/platform/activity";
 import { resolveSchoolContext } from "@/lib/platform/shared/context";
 import type { createAuthClient } from "@/lib/supabase/server-auth";
@@ -248,6 +249,31 @@ export async function commitLeadRow(
         .single();
       if (task?.id) {
         related.push({ entityType: "admissions_task", entityId: task.id, action: "created" });
+      }
+    } else if (resultAction === "imported") {
+      // A status that names its own task gets that one. Every other status
+      // falls back to the stage's standard follow-up — the same task
+      // transitionLeadStage creates when a person moves a lead by hand.
+      //
+      // WHY THIS EXISTS. Until 2026-09-09 the importer created a task ONLY when
+      // LEAD_STATUS_MAP named a pendingTask, and neither status that maps to
+      // information_sent names one: "1st request interest meeting/call" and
+      // "2nd request - schedule interest meeting/call" set a stage and stop.
+      // Those are the "we asked and heard nothing" states — the ones that most
+      // need chasing.
+      //
+      // The result was 113 families parked at information_sent with ZERO open
+      // tasks between them, the oldest waiting 216 days. Not one of them had a
+      // stage-history row, because a lead written by import never passes
+      // through transitionLeadStage. Backfilled by migration 316; this stops it
+      // recurring.
+      const stageTask = await createStageAutomatedTasks(supabase, leadId, status.leadStage);
+      if (stageTask.error) {
+        console.error("[lead import] lead created but its stage task was not", {
+          leadId,
+          stage: status.leadStage,
+          error: stageTask.error,
+        });
       }
     }
 

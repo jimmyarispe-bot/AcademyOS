@@ -58,6 +58,12 @@ function Tile({
   );
 }
 
+/**
+ * Beyond three years, a runway figure stops being a warning and starts being
+ * arithmetic. Quote it below this and say something truthful above it.
+ */
+const RUNWAY_MEANINGFUL_MONTHS = 36;
+
 /** "Jan – Aug 2026", or the raw dates if either fails to parse. */
 function periodLabel(startIso: string, endIso: string): string {
   const start = new Date(startIso);
@@ -114,12 +120,22 @@ function cashTile(fin: FounderFinancials) {
   // The runway half is a separate claim from the cash half, and it is stated
   // separately. A profitable period has no runway to report — saying so is not
   // the same as failing to compute one.
+  //
+  // AND A RUNWAY IS ONLY WORTH QUOTING WHEN IT WARNS OF SOMETHING. On 8 Sept
+  // this tile read "141.3 months at current burn": arithmetically right, from a
+  // $12,029 loss over nine months against $212,475 of cash, and useless. A
+  // near-breakeven period divided into a healthy balance produces a decade of
+  // runway that a single slow month would erase, and a figure that precise about
+  // something that unstable reads as false confidence. Past the threshold the
+  // honest statement is that burn is not the constraint.
   const runway =
-    fin.runwayMonths != null
+    fin.runwayMonths != null && fin.runwayMonths <= RUNWAY_MEANINGFUL_MONTHS
       ? `${fin.runwayMonths.toFixed(1)} months at current burn`
-      : fin.monthlyBurn == null
-        ? "Profitable this period — no burn"
-        : "Runway needs a positive cash balance";
+      : fin.runwayMonths != null
+        ? "Near breakeven — burn is not the constraint"
+        : fin.monthlyBurn == null
+          ? "Profitable this period — no burn"
+          : "Runway needs a positive cash balance";
 
   const caveat =
     fin.cashBooksMissing > 0

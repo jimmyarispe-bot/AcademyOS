@@ -8,9 +8,18 @@
  * column for six weeks with nothing surfacing it.
  */
 
+import type { LeadStageValue } from "@/lib/constants/admissions";
+
 export interface LeadStatusMapping {
-  /** Value written to `admissions_leads.lead_stage`. Must be a recognized legacy stage. */
-  readonly leadStage: string;
+  /**
+   * Value written to `admissions_leads.lead_stage`.
+   *
+   * Typed as the stage union rather than `string`, so the map below is checked
+   * against the real stage list instead of against a comment. Previously this
+   * said "Must be a recognized legacy stage" and nothing enforced it — which is
+   * also why passing it to createStageAutomatedTasks did not compile.
+   */
+  readonly leadStage: LeadStageValue;
   /** Staff to-do implied by the source status, created as an open task. */
   readonly pendingTask?: string;
   /** Attempt number where the source encoded "1st/2nd request" as a status. */

@@ -63,18 +63,29 @@ const STANDARD_AUTOMATED_TASKS: Partial<
   accepted: { taskName: "Enrollment follow-up", dueDays: 3 },
 };
 
+/**
+ * Returns the error instead of discarding it.
+ *
+ * The previous version awaited the insert and threw the result away, so a
+ * refusal — RLS, a missing column, a constraint — was indistinguishable from
+ * success. supabase-js does not throw on a policy refusal; it resolves with
+ * `{ error }`, which a bare `await` silently drops. That is the failure pattern
+ * recorded in open-items.md and this was its sixth instance. actions.ts:179
+ * makes the identical insert and has always checked; this one never did.
+ */
 async function createAutomatedTask(
   supabase: AuthClient,
   leadId: string,
   taskName: string,
   dueDate: string
-) {
-  await supabase.from("admissions_tasks").insert({
+): Promise<{ error?: string }> {
+  const { error } = await supabase.from("admissions_tasks").insert({
     lead_id: leadId,
     task_name: taskName,
     due_date: dueDate,
     task_status: "open",
   });
+  return error ? { error: error.message } : {};
 }
 
 export async function createStageAutomatedTasks(
@@ -82,7 +93,7 @@ export async function createStageAutomatedTasks(
   leadId: string,
   newStage: LeadStageValue,
   options?: { tourScheduledAt?: string }
-) {
+): Promise<{ error?: string }> {
   if (newStage === "tour_scheduled") {
     let tourDate: Date | null = null;
 
@@ -103,23 +114,23 @@ export async function createStageAutomatedTasks(
     }
 
     if (tourDate && !Number.isNaN(tourDate.getTime())) {
-      await createAutomatedTask(
+      return await createAutomatedTask(
         supabase,
         leadId,
         "Tour reminder — contact family",
         formatDateISO(addDays(tourDate, -1))
       );
     }
-    return;
+    return {};
   }
 
   const config = STANDARD_AUTOMATED_TASKS[newStage];
   const pipelineStage = resolvePipelineStageFromLeadStage(newStage);
   const registryTask = pipelineStage ? getPipelineStageAutomatedTask(pipelineStage) : undefined;
   const taskConfig = registryTask ?? config;
-  if (!taskConfig) return;
+  if (!taskConfig) return {};
 
-  await createAutomatedTask(
+  return await createAutomatedTask(
     supabase,
     leadId,
     taskConfig.taskName,
@@ -133,7 +144,7 @@ export async function transitionLeadStage(
   newStage: LeadStageValue,
   changedBy: string | null,
   options?: { tourScheduledAt?: string }
-): Promise<{ error?: string; success?: boolean }> {
+): Promise<{ error?: string; success?: boolean; taskError?: string }> {
   const { data: lead, error: fetchError } = await supabase
     .from("admissions_leads")
     .select("lead_stage")
@@ -170,7 +181,18 @@ export async function transitionLeadStage(
 
   if (updateError) return { error: updateError.message };
 
-  await createStageAutomatedTasks(supabase, leadId, newStage, options);
+  const taskResult = await createStageAutomatedTasks(supabase, leadId, newStage, options);
+  if (taskResult.error) {
+    // The stage change is committed and correct; only the follow-up task is
+    // missing. Returning an error here would report a transition that did
+    // happen as one that did not, so it is surfaced beside the success and
+    // logged where a person can see it.
+    console.error(
+      "[transitionLeadStage] stage advanced but the follow-up task was not created",
+      { leadId, newStage, error: taskResult.error }
+    );
+    return { success: true, taskError: taskResult.error };
+  }
 
   return { success: true };
 }
