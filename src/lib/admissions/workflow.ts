@@ -198,35 +198,33 @@ export async function transitionLeadStage(
 }
 
 /**
- * Open a lead's life: record the first stage, and create the first task.
+ * Record that a lead began at `new_inquiry`. History only — no task.
  *
- * WHY THE TASK IS HERE. Every later stage change runs through
- * `createStageAutomatedTasks`, which reads the registry and opens the staff
- * follow-up for the stage being entered. The opening stage never did, because
- * arriving at `new_inquiry` is not a transition — nothing calls the builder. So
- * a brand-new family was written to `admissions_leads`, mailed a welcome, and
- * then existed with no open task at all: invisible on "Families waiting on us",
- * which lists open tasks. That is precisely the shape of the 113 families parked
- * at `information_sent` since 2 February with no task between them, and from
- * the day the public inquiry URLs go on the school websites it would apply to
- * every parent who fills in the form.
+ * DO NOT CREATE A TASK HERE. It has been tried, on 9 September 2026, and it
+ * gave every new family two rows on "Families waiting on us". The opening task
+ * already exists and comes from somewhere else: the `wf_inquiry_submitted`
+ * workflow, seeded by migration 070 into `admissions_workflow_steps`, whose
+ * `create_internal_task` step opens "Follow up on new inquiry" due in 1 day and
+ * assigns it to the counsellor. `onInquirySubmitted` fires that engine, and all
+ * three creation paths call it — the public form at /apply, staff "Add Lead",
+ * and the portal tour and discovery-call pages.
  *
- * The task itself is not invented here. The registry has always defined it —
- * pipeline stage `inquiry`, "Request interest meeting", due in 2 days. The
- * intent was recorded; only the call was missing.
+ * The mistake that produced the duplicate was reading this function and
+ * `STANDARD_AUTOMATED_TASKS`, seeing `onInquirySubmitted` was only a
+ * `dispatch(...)` call, and stopping there instead of following it into
+ * `dispatchAdmissionsAutomation`. Two task systems exist in this codebase — the
+ * registry-driven one below, and the database-configured workflow engine. When
+ * adding automatic task creation, check BOTH.
  *
- * ERRORS ARE RETURNED *AND* LOGGED. Three call sites await this function and
- * ignore what it returns, and supabase-js resolves an RLS refusal rather than
- * throwing — the house failure pattern, six instances and counting. Returning
- * the errors lets a caller act on them; logging them here means that until a
- * caller does, a refusal is still visible in the Vercel logs instead of
- * vanishing. A new family with no task is exactly the silence this fixes.
+ * ERRORS ARE RETURNED AND LOGGED. Three call sites await this and ignore the
+ * result, and supabase-js resolves an RLS refusal rather than throwing, so a
+ * lead with no stage history would otherwise be written in silence.
  */
 export async function recordInitialStage(
   supabase: AuthClient,
   leadId: string,
   changedBy: string | null
-): Promise<{ error?: string; taskError?: string }> {
+): Promise<{ error?: string }> {
   const now = new Date().toISOString();
 
   const { error: historyError } = await supabase
@@ -243,18 +241,7 @@ export async function recordInitialStage(
     console.error("[recordInitialStage] stage history", { leadId, error: historyError.message });
   }
 
-  // The lead must still get its task even if history failed. History is a
-  // record of what happened; the task is what makes somebody act.
-  const { error: taskError } = await createStageAutomatedTasks(supabase, leadId, "new_inquiry");
-
-  if (taskError) {
-    console.error("[recordInitialStage] opening task", { leadId, error: taskError });
-  }
-
-  return {
-    error: historyError?.message,
-    taskError,
-  };
+  return { error: historyError?.message };
 }
 
 export interface StageDurationStats {
