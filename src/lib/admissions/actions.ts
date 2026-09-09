@@ -1,5 +1,6 @@
 "use server";
 
+import { setAutomationStartedAt } from "@/lib/admissions/automation-gate";
 import { revalidatePath } from "next/cache";
 import { recordActivity } from "@/lib/platform/activity";
 import { assertAnyPermission } from "@/lib/platform/identity/action-guards";
@@ -168,6 +169,44 @@ export async function addLeadNote(leadId: string, noteText: string) {
 
   if (error) return { error: error.message };
   revalidatePath(`/dashboard/admissions/leads/${leadId}`);
+  return { success: true };
+}
+
+/**
+ * Switch automated parent follow-up on, or off, for one family.
+ *
+ * THE DECISION THIS REPRESENTS. Leads already in JAG when the public inquiry
+ * URLs went live on 10 September 2026 carry `automation_started_at = null` —
+ * automation does not touch them. That is what let the forms go on the websites
+ * without also chasing 289 families, 113 of whom had been parked at
+ * `information_sent` since 2 February. Someone decides, per family, when it is
+ * right to start.
+ *
+ * IT RESUMES, IT DOES NOT RESTART. The reminder engine derives which wait
+ * applies from the lead's CURRENT stage, so a family sitting at
+ * `shadow_day_scheduled` is chased about their shadow day, not welcomed as a
+ * new inquiry. Most families a human starts are already halfway through the
+ * process; that is the normal case, not the exception.
+ *
+ * Stopping clears the timestamp. Any timer already open stays open — closing it
+ * is a separate, deliberate act, because silently discarding a live reminder is
+ * how a family falls out of the process without anyone noticing.
+ */
+export async function setLeadAutomation(leadId: string, enabled: boolean) {
+  const auth = await requireAdmissionsManage();
+  if ("error" in auth) return { error: auth.error };
+  const supabase = auth.supabase;
+
+  const { error } = await setAutomationStartedAt(
+    supabase,
+    leadId,
+    enabled ? new Date().toISOString() : null
+  );
+
+  if (error) return { error };
+
+  revalidatePath(`/dashboard/admissions/leads/${leadId}`);
+  revalidatePath(`/dashboard/admissions/cases/${leadId}`);
   return { success: true };
 }
 

@@ -46,6 +46,12 @@ export type WaitingFamily = {
   guardianPhone: string | null;
   /** A real, complete link. Never a placeholder — Jimmy pastes what he is given. */
   caseHref: string;
+  /**
+   * True when automated parent follow-up has been switched on for this family.
+   * Families already in JAG when the public inquiry URLs went live are OFF and
+   * stay off until a human starts them.
+   */
+  automationOn: boolean;
 };
 
 export type WaitingCampus = {
@@ -110,7 +116,7 @@ export async function getFamiliesWaiting(): Promise<WaitingList> {
       // select list as a literal type to work out the row shape; splitting it
       // over `+` widens it to `string` and every column below resolves to
       // `GenericStringError`. Keep this on one line however long it gets.
-      .select("id, first_name, last_name, preferred_name, applying_for_grade, lead_stage, school_id, guardian_first_name, guardian_last_name, guardian_email, guardian_phone")
+      .select("id, first_name, last_name, preferred_name, applying_for_grade, lead_stage, school_id, guardian_first_name, guardian_last_name, guardian_email, guardian_phone, automation_started_at")
       .in("id", leadIds),
     supabase.from("schools").select("id, name"),
   ]);
@@ -149,6 +155,7 @@ export async function getFamiliesWaiting(): Promise<WaitingList> {
       guardianEmail: lead.guardian_email,
       guardianPhone: lead.guardian_phone,
       caseHref: `/dashboard/admissions/cases/${lead.id}?section=tasks`,
+      automationOn: lead.automation_started_at != null,
     });
   }
 

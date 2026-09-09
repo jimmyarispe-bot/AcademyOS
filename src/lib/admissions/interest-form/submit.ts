@@ -22,6 +22,7 @@ import {
   getClientIpFromHeaders,
 } from "@/lib/platform/api-rate-limit";
 import { createAuthClient } from "@/lib/supabase/server-auth";
+import { setAutomationStartedAt } from "@/lib/admissions/automation-gate";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 
 function asString(value: unknown): string {
@@ -214,6 +215,35 @@ export async function submitPublishedInterestForm(
   // Post-RPC trusted server work: anon RLS cannot read admissions_leads.
   // Service role is scoped to this controlled server action; leadId comes from SECURITY DEFINER RPC.
   const admin = createServiceRoleClient();
+
+  /**
+   * A family who just filled in the public form has asked to hear from us, so
+   * automated follow-up starts here and nowhere else.
+   *
+   * Every other route into `admissions_leads` — bulk import, staff "Add Lead" —
+   * leaves `automation_started_at` NULL, and a human presses Start on the case
+   * when they judge the family ready. That gate is what let the inquiry URLs go
+   * on the websites without the reminder engine also chasing the 289 families
+   * already in the database, 113 of whom had been parked since February.
+   *
+   * The error is checked rather than assumed. A refusal here is silent in
+   * supabase-js, and a lead created but never opted in would simply never be
+   * followed up — the quietest possible failure, and the one this whole gate
+   * exists to make loud.
+   */
+  const { error: gateError } = await setAutomationStartedAt(
+    admin,
+    leadId,
+    new Date().toISOString()
+  );
+
+  if (gateError) {
+    console.error("[interest-form] could not enable automation for new lead", {
+      leadId,
+      error: gateError,
+    });
+  }
+
   await recordInitialStage(admin, leadId, null);
   await onInquirySubmitted(admin, leadId);
 

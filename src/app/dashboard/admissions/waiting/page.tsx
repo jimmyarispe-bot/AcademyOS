@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { StartAutomationButton } from "@/components/admissions/StartAutomationButton";
 import { getIdentityContext } from "@/lib/platform/identity/context";
 import { hasPermission } from "@/lib/platform/identity/authorization-service";
 import { formatCount } from "@/lib/format";
@@ -194,12 +195,18 @@ export default async function AdmissionsWaitingPage({ searchParams }: WaitingPag
                     </td>
                     <td className="px-4 py-3 text-slate-600">{f.taskName}</td>
                     <td className="whitespace-nowrap px-4 py-3 text-right">
-                      <Link
-                        href={f.caseHref}
-                        className="rounded-lg border border-brand-200 px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-50"
-                      >
-                        Open case
-                      </Link>
+                      {/* Start is the human decision the automation gate exists
+                          to preserve. Families already in JAG are not chased
+                          until someone here says so. */}
+                      <div className="flex items-center justify-end gap-2">
+                        <StartAutomationButton leadId={f.leadId} isOn={f.automationOn} />
+                        <Link
+                          href={f.caseHref}
+                          className="rounded-lg border border-brand-200 px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-50"
+                        >
+                          Open case
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}

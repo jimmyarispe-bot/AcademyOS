@@ -69,6 +69,13 @@ interface LeadRow {
   school_id: string;
   lead_stage: string | null;
   guardian_email: string | null;
+  /**
+   * When automated follow-up was switched on for this family. Rows reaching
+   * this engine always have it set — the query filters on it — but it is
+   * carried so anything downstream can say WHEN a family was opted in rather
+   * than assuming it always was.
+   */
+  automation_started_at: string | null;
 }
 
 interface OpenReminderRow {
@@ -230,9 +237,28 @@ export async function processParentReminders(): Promise<ParentReminderRunSummary
   let skippedNoEmail = 0;
 
   const [leadsResult, openResult, templatesResult] = await Promise.all([
+    /**
+     * THE GATE. Only leads a human (or the public inquiry form) has switched on.
+     *
+     * This read used to have no filter at all, which meant every lead in the
+     * database was in scope for automated chasing - 289 families, including the
+     * 113 parked at `information_sent` since 2 February 2026. The only thing
+     * preventing that was an instruction not to run the job, which is not a
+     * safeguard, it is a habit.
+     *
+     * `automation_started_at` is set by the public form at creation and by a
+     * human pressing Start on a case. NULL means nobody has chosen to contact
+     * this family, and nothing here will.
+     *
+     * A lead switched on mid-funnel resumes from its CURRENT stage, because
+     * `currentWaits` derives the wait from `lead_stage` rather than replaying
+     * the process from the beginning. That is deliberate: most families a human
+     * starts are already halfway through.
+     */
     supabase
       .from("admissions_leads")
-      .select("id, school_id, lead_stage, guardian_email"),
+      .select("id, school_id, lead_stage, guardian_email, automation_started_at")
+      .not("automation_started_at", "is", null),
     supabase
       .from("admissions_parent_reminders")
       .select("id, lead_id, wait_key, waiting_since, reminders_sent, last_reminded_at")
