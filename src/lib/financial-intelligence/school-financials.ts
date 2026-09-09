@@ -121,6 +121,11 @@ export async function computeSchoolFinancials(
     // A school with no books has no health to report. "yellow" says "unknown"
     // rather than the "green" the old constants produced unconditionally.
     healthIndicator: qb.ok ? healthFromMargin(netMargin) : "yellow",
+    // The balance-sheet cash QuickBooks reports. DISTINCT FROM cashFlow above,
+    // which is cash COLLECTED through JAG invoices this calendar year - a real
+    // measurement, but of a different thing, and one that reads 0 because JAG
+    // has never issued an invoice. Square does the billing.
+    quickbooksCash: qb.ok ? qb.figures.cash : null,
     basis: qb.ok ? "quickbooks" : "unavailable",
     basisNote: qb.ok ? null : qb.reason,
     periodStart: qb.ok ? qb.figures.periodStart : null,

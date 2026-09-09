@@ -31,7 +31,15 @@ export function FiExecutiveOverview({ dashboard }: { dashboard: ExecutiveFinanci
     <div className="space-y-6">
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="EBITDA" value={formatCurrency(dashboard.ebitda)} />
-        <Metric label="Cash position" value={formatCurrency(dashboard.cashPosition)} />
+        {/* Money in the bank, from the QuickBooks balance sheet. This used to
+            render cash COLLECTED through JAG invoices under this label, which
+            reads $0 for every school because JAG has never issued an invoice —
+            Square does the billing. An em dash says "not connected"; a zero
+            would say "no money". */}
+        <Metric
+          label="Cash position"
+          value={dashboard.cashPosition == null ? "—" : formatCurrency(dashboard.cashPosition)}
+        />
         <Metric label="Operating margin" value={`${dashboard.operatingMargin.toFixed(1)}%`} />
         <Metric label="Contribution margin" value={`${dashboard.contributionMargin.toFixed(1)}%`} />
         <Metric label="Classes below break-even" value={dashboard.classesBelowBreakeven} />

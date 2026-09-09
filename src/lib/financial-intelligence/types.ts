@@ -130,6 +130,13 @@ export interface SchoolFinancialsRow {
   /** The QuickBooks period these figures cover. Null when basis is "unavailable". */
   periodStart: string | null;
   periodEnd: string | null;
+  /**
+   * Balance-sheet cash from QuickBooks. NOT the same thing as `cashFlow`, which
+   * is cash collected through JAG invoices this calendar year — a real figure,
+   * but of a different quantity, and one that reads 0 because JAG has never
+   * issued an invoice. Square does the billing.
+   */
+  quickbooksCash: number | null;
 }
 
 export interface ScenarioInput {
@@ -158,7 +165,14 @@ export interface ScenarioResult {
 
 export interface ExecutiveFinancialDashboard {
   ebitda: number;
-  cashPosition: number;
+  /**
+   * Money in the bank, from the QuickBooks balance sheet. Null when no book is
+   * connected — render the absence, never a zero, because a zero here reads as
+   * "no money" when it means "we did not look".
+   */
+  cashPosition: number | null;
+  /** Cash collected through JAG invoices this calendar year. A different quantity. */
+  cashCollectedYtd: number;
   revenueTrend: number | null;
   marginTrend: number | null;
   operatingMargin: number;

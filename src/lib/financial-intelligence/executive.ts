@@ -37,7 +37,21 @@ export async function getExecutiveFinancialDashboard(
 
   return {
     ebitda: school.ebitda,
-    cashPosition: school.cashFlow,
+    /**
+     * CASH POSITION IS A BALANCE, NOT A FLOW. This read `school.cashFlow` —
+     * cash COLLECTED through JAG invoices this calendar year — under a label
+     * that means the money in the bank. Both are real quantities; they are not
+     * the same quantity, and the one being shown reads $0 for every school
+     * because JAG has never issued an invoice. Square does the billing.
+     *
+     * It now takes the QuickBooks balance-sheet figure, which is where the
+     * Founder Brief's cash tile comes from, so the two screens agree. Null when
+     * no book is connected, and the panel says so rather than showing a zero
+     * that means "we did not look".
+     */
+    cashPosition: school.quickbooksCash,
+    /** Unchanged: cash collected through JAG invoices, correctly named. */
+    cashCollectedYtd: school.cashFlow,
     revenueTrend: finance.collectionRate,
     marginTrend: school.operatingMargin,
     operatingMargin: school.operatingMargin,
