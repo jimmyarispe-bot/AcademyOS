@@ -30,30 +30,51 @@ import { computeSchoolFinancials } from "@/lib/financial-intelligence/school-fin
 import { getScenarios } from "@/lib/financial-intelligence/scenarios";
 import type { ScenarioResult } from "@/lib/financial-intelligence/types";
 import { getIdentityContext } from "@/lib/platform/identity/context";
+import { canAccessSchool, resolvePrimarySchoolId } from "@/lib/platform/identity/school-access";
 import { createAuthClient } from "@/lib/supabase/server-auth";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ActionChip, ActionChipGroup } from "@/components/experience-system/feedback/ActionChip";
 
 interface IntelligencePageContentProps {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; school?: string }>;
 }
 
 export async function IntelligencePageContent({ searchParams }: IntelligencePageContentProps) {
   const ctx = await getIdentityContext();
   if (!ctx || !canViewFi(ctx)) redirect("/dashboard");
 
-  const { view: rawView } = await searchParams;
+  const { view: rawView, school: requestedSchool } = await searchParams;
   const validViews = new Set(FI_TABS.map((t) => t.value));
   const view = rawView && validViews.has(rawView as (typeof FI_TABS)[number]["value"]) ? rawView : "overview";
 
-  const schoolId =
-    ctx.orgAssignments.find((a) => a.is_primary)?.school_id ||
-    ctx.accessibleSchoolIds[0] ||
-    "";
-
+  /**
+   * WHICH SCHOOL AM I LOOKING AT? Until 9 September 2026 this page could not
+   * answer that. It resolved:
+   *
+   *     ctx.orgAssignments.find(a => a.is_primary)?.school_id ||
+   *     ctx.accessibleSchoolIds[0] || ""
+   *
+   * — the user's primary assignment, or failing that whichever id happened to
+   * be first in an array with no guaranteed ordering — then rendered a page of
+   * money with no campus named anywhere on it and no way to switch. A founder
+   * with four schools got one of them, silently, and could not tell which.
+   *
+   * `resolvePrimarySchoolId` already does this properly and checks access on
+   * every candidate; the page had reimplemented it, worse. Now the school comes
+   * from the URL when one is asked for, so a campus view is a link somebody can
+   * bookmark or send on, and the name is on the page either way.
+   */
+  const supabase = await createAuthClient();
+  const schoolId = resolvePrimarySchoolId(ctx, requestedSchool);
   if (!schoolId) redirect("/dashboard");
 
-  const supabase = await createAuthClient();
+  // Unrestricted roles carry an EMPTY accessibleSchoolIds — the encoding for
+  // "all of them" — so the list is fetched rather than derived from that array.
+  const { data: allSchools } = await supabase.from("schools").select("id, name").order("name");
+  const selectableSchools = (allSchools ?? []).filter((s) => canAccessSchool(ctx, s.id));
+  const currentSchoolName =
+    selectableSchools.find((s) => s.id === schoolId)?.name ?? "Unnamed school";
 
   const [
     executive,
@@ -93,9 +114,12 @@ export async function IntelligencePageContent({ searchParams }: IntelligencePage
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
+        {/* The campus is in the title, not implied. Every figure on this page
+            belongs to one school, and a page of money that does not say whose
+            money it is invites exactly the wrong conclusion. */}
         <PageHeader
-          title="Financial Intelligence"
-          subtitle="Enterprise business analytics — profitability, forecasting, scenarios, and executive dashboards"
+          title={`Financial Intelligence · ${currentSchoolName}`}
+          subtitle="Profitability, forecasting, scenarios and executive analytics — for this campus only, before network costs"
         />
         <ActionChipGroup>
           <ActionChip href="/dashboard/finance" size="sm">Finance</ActionChip>
@@ -103,6 +127,25 @@ export async function IntelligencePageContent({ searchParams }: IntelligencePage
           <ActionChip href="/api/financial-intelligence/reports?type=classes" size="sm">Export CSV</ActionChip>
         </ActionChipGroup>
       </div>
+
+      {selectableSchools.length > 1 ? (
+        <nav className="flex flex-wrap gap-2" aria-label="Campus">
+          {selectableSchools.map((s) => (
+            <Link
+              key={s.id}
+              href={`/dashboard/finance/intelligence?view=${view}&school=${s.id}`}
+              aria-current={s.id === schoolId ? "page" : undefined}
+              className={
+                s.id === schoolId
+                  ? "rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700"
+                  : "rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+              }
+            >
+              {s.name}
+            </Link>
+          ))}
+        </nav>
+      ) : null}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard title="EBITDA" value={formatCurrency(executive.ebitda)} description="School-level contribution" accent="emerald" icon={<span className="font-bold">E</span>} />
@@ -125,7 +168,18 @@ export async function IntelligencePageContent({ searchParams }: IntelligencePage
         <StatCard title="Financial risks" value={String(executive.financialRisks)} description="Active FI alerts" accent="rose" icon={<span className="font-bold">⚠</span>} />
       </section>
 
-      <ViewTabs tabs={FI_TABS.map(({ href, label, value }) => ({ href, label, value }))} activeView={view} />
+      {/* The campus travels with the tab. FI_TABS carries a bare ?view= href, so
+          without this a user who switched from Overview to Teachers would land
+          silently back on their primary school - the same page of money, a
+          different campus, nothing saying so. */}
+      <ViewTabs
+        tabs={FI_TABS.map(({ href, label, value }) => ({
+          href: `${href}&school=${schoolId}`,
+          label,
+          value,
+        }))}
+        activeView={view}
+      />
 
       {view === "overview" && <FiExecutiveOverview dashboard={executive} />}
       {view === "classes" && <ClassProfitabilityTable rows={classes} />}
