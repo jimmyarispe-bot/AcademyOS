@@ -19,6 +19,7 @@ import { AdmissionsPipelineBoard } from "@/components/admissions/AdmissionsPipel
 import { ExecutiveAdmissionsDashboard } from "@/components/admissions/ExecutiveAdmissionsDashboard";
 import { KanbanBoard } from "@/components/admissions/KanbanBoard";
 import { LeadList } from "@/components/admissions/LeadList";
+import { PublicInquiryLinkPanel } from "@/components/admissions/PublicInquiryLinkPanel";
 import { ViewTabs } from "@/components/ui/ViewTabs";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { IntelligenceLink } from "@/components/ui/IntelligenceLink";
@@ -28,6 +29,7 @@ import {
   getLeadsDrillDown,
 } from "@/lib/admissions/executive-metrics";
 import { getAdmissionsReporting, getAdmissionsWorkData, getLeads } from "@/lib/admissions/queries";
+import { getPublicInquiryLinks } from "@/lib/admissions/public-form-links";
 import { executeWorkspace } from "@/lib/platform/execution-engine";
 import { getIdentityContext } from "@/lib/platform/identity/context";
 import { ADMISSIONS_WORK_PERSPECTIVES, resolveJagWorkPerspective, resolveJagWorkQueue } from "@/lib/platform/jag-work";
@@ -121,7 +123,9 @@ export async function AdmissionsPageContent({ searchParams }: AdmissionsPageCont
 
   const workPerspective = resolveJagWorkPerspective("admissions", sp.work);
   // P004: overlap engine with independent admissions domain loads.
-  const [execution, supabase, [leads, workData]] = await Promise.all([
+  // The public links join the same wave — they are two small reads and must not
+  // add a serial round trip to a page that already loads four things.
+  const [execution, supabase, [leads, workData], publicLinks] = await Promise.all([
     executeWorkspace({
       workspaceKey: "admissions",
       identity: ctx,
@@ -130,6 +134,7 @@ export async function AdmissionsPageContent({ searchParams }: AdmissionsPageCont
     }),
     createAuthClient(),
     Promise.all([getLeads(), getAdmissionsWorkData()]),
+    getPublicInquiryLinks(),
   ]);
   const workspaceState = execution.state;
 
@@ -227,6 +232,11 @@ export async function AdmissionsPageContent({ searchParams }: AdmissionsPageCont
         href="/dashboard/admissions/waiting"
         linkLabel="Families waiting on us"
       />
+      {/* The public address, on the screen people actually open. A link to the
+          form already existed, in a sub-navigation row that renders only in the
+          legacy ?view= screens — it opened the form and never showed the URL,
+          which is not what anyone was looking for. */}
+      <PublicInquiryLinkPanel links={publicLinks} />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard title="Work in queue" value={formatCount(activeItems.length)} description={perspectiveLabel} accent="brand" icon={<span className="text-lg font-bold">W</span>} />
         <MetricCard title="Active pipeline" value={formatCount(leads.filter((l) => !["enrolled", "declined"].includes(l.lead_stage)).length)} description="Open cases" accent="indigo" icon={<span className="text-lg font-bold">P</span>} />

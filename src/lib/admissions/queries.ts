@@ -69,11 +69,31 @@ function mapLead(row: Record<string, unknown>, fundingSources: string[]): Admiss
   };
 }
 
+/**
+ * Every lead, newest inquiry first.
+ *
+ * ORDERED BY `inquiry_date`, NOT `created_at`. They are different facts and the
+ * difference is large: `created_at` is when JAG learned about a family, and 303
+ * of these were bulk-imported in a handful of batches on 25 August and 7
+ * September 2026. Sorting by it grouped seven months of inquiries into a few
+ * indistinguishable clumps stamped with the import run. `inquiry_date` is when
+ * the family actually came to us — 160 distinct dates from March 2024 to today
+ * — which is what somebody scanning this list is looking for.
+ *
+ * `created_at` remains the tie-break, so two families who inquired on the same
+ * day still have a stable order, and a lead whose inquiry date is somehow
+ * missing sorts last rather than vanishing.
+ *
+ * NOTE: "Families waiting on us" is deliberately the opposite — oldest first.
+ * That screen exists to surface the longest-neglected family, and it sorts on
+ * task due date, not this. Do not make them agree.
+ */
 export async function getLeads() {
   const supabase = await createAuthClient();
   const { data, error } = await supabase
     .from("admissions_leads")
     .select("*, schools(name)")
+    .order("inquiry_date", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false });
 
   if (error) {
