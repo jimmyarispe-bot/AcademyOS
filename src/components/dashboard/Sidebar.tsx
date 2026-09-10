@@ -78,6 +78,12 @@ export function Sidebar({
         }
       : module
   );
+  // Dark logo first — this mark sits on the navy sidebar. Empty string is the
+  // "not configured" value the branding resolver returns, so trim before
+  // deciding, or a stray space renders a broken image.
+  const brandMarkUrl =
+    branding.darkLogoUrl?.trim() || branding.logoUrl?.trim() || "";
+
   const footerTagline = formatWorkspaceProductLine({
     branding,
     isFounder,
@@ -116,9 +122,28 @@ export function Sidebar({
         )}
       >
         <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-6">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white">
-            {branding.monogram}
-          </div>
+          {/* The organization's own mark when it has one, the monogram when it
+              does not. `logo_url` and `dark_logo_url` were collected by
+              /dashboard/admin/branding and read by nothing at all, so every
+              subscriber got a letter in a coloured square whatever they
+              uploaded.
+
+              The dark logo is preferred because this sits on the navy sidebar.
+              A white background is painted behind it: most school logos are
+              drawn for white and disappear on dark, and a mark nobody can see
+              is worse than the letter it replaced. */}
+          {brandMarkUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={brandMarkUrl}
+              alt={branding.organizationName}
+              className="h-9 w-9 shrink-0 rounded-lg bg-white object-contain p-0.5"
+            />
+          ) : (
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white">
+              {branding.monogram}
+            </div>
+          )}
           <div>
             {/* tone="light" deliberately: the network's dark blue is
                 unreadable on the navy sidebar. Routed through the same
