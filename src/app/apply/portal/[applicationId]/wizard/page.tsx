@@ -26,6 +26,20 @@ export default async function ApplicationWizardPage({ params }: WizardPageProps)
   const documents = await getApplicationDocuments(applicationId);
   const { application } = portalData;
 
+  /**
+   * The three columns migration 321 added, read through a narrow cast.
+   *
+   * 321 was hand-run, so `guardian_notes`, `student_summary` and
+   * `medical_notes` are absent from the generated `database.ts` until types are
+   * regenerated. Naming exactly the three keeps every other field on the row
+   * type-checked; widening `application` itself would silence real errors.
+   */
+  const wizardColumns = application as unknown as {
+    guardian_notes?: string | null;
+    student_summary?: string | null;
+    medical_notes?: string | null;
+  };
+
   return (
     <ApplyShell userEmail={sessionUser.email}>
       <div className="space-y-6">
@@ -51,6 +65,9 @@ export default async function ApplicationWizardPage({ params }: WizardPageProps)
             emergency_contact_name: application.emergency_contact_name,
             emergency_contact_phone: application.emergency_contact_phone,
             learning_needs_summary: application.learning_needs_summary,
+            guardian_notes: wizardColumns.guardian_notes ?? null,
+            student_summary: wizardColumns.student_summary ?? null,
+            medical_notes: wizardColumns.medical_notes ?? null,
           }}
         />
 

@@ -177,19 +177,66 @@ export async function startApplication(leadId: string, schoolYearId: string) {
   return { applicationId: data.id };
 }
 
+/**
+ * Fields the application wizard and the details form may write.
+ *
+ * `guardian_notes`, `student_summary` and `medical_notes` arrive from
+ * hand-run migration 321 and are therefore absent from the generated
+ * `database.ts` until types are regenerated. That is why the update below is
+ * built as a plain record and the client narrowed, rather than typed from the
+ * schema.
+ */
+const APPLICATION_DETAIL_FIELDS = [
+  "previous_school",
+  "emergency_contact_name",
+  "emergency_contact_phone",
+  "learning_needs_summary",
+  "guardian_notes",
+  "student_summary",
+  "medical_notes",
+] as const;
+
+type LooseApplicationUpdater = {
+  from: (table: string) => {
+    update: (row: Record<string, unknown>) => {
+      eq: (column: string, value: string) => PromiseLike<{ error: { message: string } | null }>;
+    };
+  };
+};
+
+/**
+ * Save one wizard step — writing ONLY the fields that step actually submitted.
+ *
+ * THE BUG THIS FIXES. This function used to set all four columns on every
+ * call, each read with `formData.get(...) || null`. The wizard renders one step
+ * at a time, so the other steps' keys were simply absent from the submission,
+ * `get()` returned null, and the update blanked them. A family who entered
+ * their emergency contact on step 6 and then moved to step 7 lost the name and
+ * the phone number, silently, behind a "Draft saved" toast.
+ *
+ * Steps 8, 9 and 10 carried hidden inputs echoing the existing values back —
+ * evidence that somebody hit this and patched three of the eleven steps. The
+ * presence check below fixes it for all of them, so those hidden inputs are no
+ * longer load-bearing and have been removed from the component.
+ *
+ * `has()` rather than `get()` is the whole fix: a field the step did not render
+ * is left alone, while a field the family deliberately cleared is written as
+ * null. Those two cases are indistinguishable through `get()` and they must not
+ * be treated the same.
+ */
 export async function saveApplicationDetails(formData: FormData) {
   const supabase = await createAuthClient();
   const applicationId = formData.get("application_id") as string;
 
-  const { error } = await supabase
+  const update: Record<string, unknown> = { application_status: "in_progress" };
+  for (const field of APPLICATION_DETAIL_FIELDS) {
+    if (!formData.has(field)) continue;
+    update[field] = (formData.get(field) as string)?.trim() || null;
+  }
+
+  const { error } = await (supabase as unknown as LooseApplicationUpdater)
     .from("admissions_applications")
-    .update({
-      previous_school: (formData.get("previous_school") as string) || null,
-      emergency_contact_name: (formData.get("emergency_contact_name") as string) || null,
-      emergency_contact_phone: (formData.get("emergency_contact_phone") as string) || null,
-      learning_needs_summary: (formData.get("learning_needs_summary") as string) || null,
-      application_status: "in_progress",
-    })
+    .update(update)
     .eq("id", applicationId);
 
   if (error) return { error: error.message };

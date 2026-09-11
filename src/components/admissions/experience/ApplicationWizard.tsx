@@ -22,6 +22,7 @@ type Defaults = {
   learning_needs_summary?: string | null;
   medical_notes?: string | null;
   guardian_notes?: string | null;
+  student_summary?: string | null;
 };
 
 export function ApplicationWizard({
@@ -142,10 +143,10 @@ export function ApplicationWizard({
             <label className={portalLabelClass} htmlFor="guardian_notes">Notes</label>
             <textarea
               id="guardian_notes"
-              name="learning_needs_summary"
+              name="guardian_notes"
               rows={3}
               className={portalInputClass}
-              defaultValue={defaults.guardian_notes ?? defaults.learning_needs_summary ?? ""}
+              defaultValue={defaults.guardian_notes ?? ""}
             />
           </fieldset>
         )}
@@ -156,13 +157,13 @@ export function ApplicationWizard({
             <p className="text-sm text-slate-500">
               Core student fields come from your inquiry. Confirm learning context below.
             </p>
-            <label className={portalLabelClass} htmlFor="learning_needs_summary">Student summary</label>
+            <label className={portalLabelClass} htmlFor="student_summary">Student summary</label>
             <textarea
-              id="learning_needs_summary"
-              name="learning_needs_summary"
+              id="student_summary"
+              name="student_summary"
               rows={4}
               className={portalInputClass}
-              defaultValue={defaults.learning_needs_summary ?? ""}
+              defaultValue={defaults.student_summary ?? ""}
             />
           </fieldset>
         )}
@@ -186,10 +187,10 @@ export function ApplicationWizard({
             <label className={portalLabelClass} htmlFor="medical_notes">Medical notes</label>
             <textarea
               id="medical_notes"
-              name="learning_needs_summary"
+              name="medical_notes"
               rows={4}
               className={portalInputClass}
-              defaultValue={defaults.medical_notes ?? defaults.learning_needs_summary ?? ""}
+              defaultValue={defaults.medical_notes ?? ""}
               placeholder="Allergies, medications, accommodations (also upload medical docs)"
             />
           </fieldset>
@@ -261,10 +262,6 @@ export function ApplicationWizard({
                 <li key={p.value}>{p.label}</li>
               ))}
             </ul>
-            <input type="hidden" name="previous_school" defaultValue={defaults.previous_school ?? ""} />
-            <input type="hidden" name="emergency_contact_name" defaultValue={defaults.emergency_contact_name ?? ""} />
-            <input type="hidden" name="emergency_contact_phone" defaultValue={defaults.emergency_contact_phone ?? ""} />
-            <input type="hidden" name="learning_needs_summary" defaultValue={defaults.learning_needs_summary ?? ""} />
           </fieldset>
         )}
 
@@ -275,10 +272,6 @@ export function ApplicationWizard({
               Complete financial aid details on the application page scholarship section after this wizard.
               Funding sources remain on Finance / scholarship services.
             </p>
-            <input type="hidden" name="previous_school" defaultValue={defaults.previous_school ?? ""} />
-            <input type="hidden" name="emergency_contact_name" defaultValue={defaults.emergency_contact_name ?? ""} />
-            <input type="hidden" name="emergency_contact_phone" defaultValue={defaults.emergency_contact_phone ?? ""} />
-            <input type="hidden" name="learning_needs_summary" defaultValue={defaults.learning_needs_summary ?? ""} />
           </fieldset>
         )}
 
@@ -288,10 +281,6 @@ export function ApplicationWizard({
             <p className="text-sm text-slate-500">
               Use the Document Center below (or return to the application page). KnowledgeEngine owns storage.
             </p>
-            <input type="hidden" name="previous_school" defaultValue={defaults.previous_school ?? ""} />
-            <input type="hidden" name="emergency_contact_name" defaultValue={defaults.emergency_contact_name ?? ""} />
-            <input type="hidden" name="emergency_contact_phone" defaultValue={defaults.emergency_contact_phone ?? ""} />
-            <input type="hidden" name="learning_needs_summary" defaultValue={defaults.learning_needs_summary ?? ""} />
           </fieldset>
         )}
 
@@ -302,10 +291,6 @@ export function ApplicationWizard({
               Submitting marks the application submitted, advances the CRM workflow, notifies staff,
               and publishes Digital Twin / Evidence / Memory events.
             </p>
-            <input type="hidden" name="previous_school" defaultValue={defaults.previous_school ?? ""} />
-            <input type="hidden" name="emergency_contact_name" defaultValue={defaults.emergency_contact_name ?? ""} />
-            <input type="hidden" name="emergency_contact_phone" defaultValue={defaults.emergency_contact_phone ?? ""} />
-            <input type="hidden" name="learning_needs_summary" defaultValue={defaults.learning_needs_summary ?? ""} />
           </fieldset>
         )}
 
