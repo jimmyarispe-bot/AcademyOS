@@ -10,7 +10,6 @@ import {
   ApplicationStatusChip,
   ApplicationStatusLegend,
 } from "@/components/admissions/experience/ApplicationStatusChip";
-import { EnrollmentOfferPanel } from "@/components/admissions/experience/EnrollmentOfferPanel";
 import { ContractsPanel } from "@/components/admissions/experience/ContractsPanel";
 import { ListSkeleton } from "@/components/experience-system";
 import Link from "next/link";
@@ -175,10 +174,21 @@ export default async function PortalApplicationPage({ params }: PortalApplicatio
           applicationStatus={application.application_status}
         />
 
-        <EnrollmentOfferPanel
-          applicationId={applicationId}
-          leadId={application.lead_id}
-        />
+        {/* THE ENROLLMENT OFFER PANEL IS NOT HERE, AND MUST NOT COME BACK.
+            This page is the applicant's. Its only guard is "somebody is signed
+            in" — the row-level policies decide whose application it is, not
+            this route — so anything rendered here is rendered to the family.
+
+            Generating an enrollment offer is the school accepting a student.
+            The button called generateEnrollmentPacket() directly, which is
+            step 2 of the wf_accepted workflow, and stepping into the middle of
+            that workflow skips step 1: the student_accepted communication. A
+            packet appeared with packet_status 'sent' — a hardcoded literal in
+            the insert — and no living person was told anything.
+
+            Acceptance belongs on the staff case screen, where moving a lead to
+            `accepted` runs all four steps in order: notify, generate packet,
+            open the follow-up task, write the audit entry. */}
 
         <ContractsPanel
           applicationId={applicationId}
