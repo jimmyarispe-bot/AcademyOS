@@ -1,45 +1,33 @@
-Portal: a parent can see their own record, and change it
+Admissions: every contact at a campus hears about an inquiry, one calendar gets booked
 
-/portal/profile could neither read a guardian nor write one, and both failures
-were silent.
+Migration 327 split the two jobs that schools.admissions_contact_email had been
+doing at once. This is the code that reads it.
 
-THE READ. It selected `relationship` from guardians. There is no such column —
-it is relationship_to_student. PostgREST rejects the whole select on an unknown
-column, supabase-js resolves with { data: null, error }, and the page
-destructured only data. So guardian was always null, every parent saw their name
-rendered as their email address and their phone as an em dash, and nothing was
-logged anywhere. The error is read now, and a page that cannot load a family's
-record says so instead of rendering a plausible-looking blank.
+Being told an inquiry arrived is a notification — three people can want it and
+nothing breaks when all three know. Being the name on a booking link is a
+commitment to one person's calendar. The engine now sends staff mail to every
+active contact with receives_notifications, while the booking contact alone
+signs parent mail, receives its replies, and supplies {{scheduling_link}}.
 
-THE WRITE. The save button called updatePortalPreferencesAction, which writes a
-notifications blob and an accessibility blob and never touches guardians. The
-form it belongs to is honestly labelled "Communication preferences" and was
-never wrong; what was missing was anywhere to change a name, an email or a phone
-number — the exact thing the go-live email will ask families to do.
+FALLBACK IS DELIBERATE AND PERMANENT, NOT A MIGRATION SHIM. If the table is
+empty for a school, or absent because 327 has not run where this is deployed,
+the school's own columns still answer. The error from the query is read rather
+than ignored: a missing table, a policy refusal and an empty result all arrive
+as an error object nobody is obliged to look at, and falling back silently on a
+refusal would mean one person keeps being notified while nobody ever learns why
+the other two are not.
 
-THE POLICY. guardians carried one policy, guardians_staff_all. Staff can see
-every guardian at a school they can access; a parent could see nothing,
-including themselves. Migration 330 adds SELECT on the row whose user_id is the
-signed-in user, and deliberately no UPDATE.
+The existing drop-guard is extended rather than replaced. A staff template with
+no recipient anywhere is still dropped instead of queued as a delivery to the
+empty string.
 
-RLS secures rows, not columns. An update policy scoped to "your own row" would
-also let a parent working through the API set receives_billing,
-financial_responsibility_percent, custody_status or legal_restrictions on it.
-Those are the school's facts about a family, not the family's. So writes go
-through a server action that locates the row BY SESSION USER — never by an id
-from the form, which would be an id a caller could change — and sets four
-fields: first name, last name, email, phone.
+Verified against production before writing: all four campuses have exactly one
+contact and one booking contact, so this ships with behaviour unchanged. Adding
+a second person is now an insert.
 
-Saving clears needs_confirmation. The 77 rows built from billing data carry that
-flag so a human confirming them can be told from a machine guessing at them, and
-this is the human doing it. Those parents are also told plainly that the name
-came from billing records and may be wrong, rather than being shown a form that
-implies the school already knows who they are.
-
-STILL NOT USABLE, AND THE REASON IS NOT IN THIS COMMIT. Parents have no
-accounts: users holds five rows, all staff, and every guardian row has a null
-user_id. This policy matches nothing today. Parent account invitation is the
-fourth and last link in the chain, and it is the one that remains.
+Seven tests cover the resolver, including the two paths that decide whether this
+is safe: an unreadable table falls back AND logs, and a school with no contact
+anywhere returns nothing to notify.
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_014B9rkuWAq2petze3CoyFp6

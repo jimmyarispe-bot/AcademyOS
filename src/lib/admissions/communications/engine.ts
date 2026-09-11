@@ -1,5 +1,6 @@
 import type { createAuthClient } from "@/lib/supabase/server-auth";
 import { fetchLeadFundingCodesByLeadIds } from "@/lib/funding/sync";
+import { resolveSchoolAdmissionsContacts } from "@/lib/admissions/communications/staff-recipients";
 import { renderTemplate, type MergeContext } from "@/lib/admissions/communications/merge-fields";
 import { adjustManyScheduledForBusinessHours } from "@/lib/platform/automation/business-hours";
 import { sendTransactionalEmail } from "@/lib/platform/email";
@@ -297,7 +298,11 @@ async function deliverCommunication(
       : channel === "internal_note"
         ? "staff"
         : channel === "staff_email"
-          ? params.mergeCtx.admissionsContactEmail ?? ""
+          ? // Every admissions contact for the campus, not just the one whose
+            // calendar parents book. Falls back to the single contact so a
+            // school with no rows in school_admissions_contacts still gets mail.
+            (params.mergeCtx.staffNotificationEmails ?? []).join(", ") ||
+            (params.mergeCtx.admissionsContactEmail ?? "")
           : params.mergeCtx.guardianEmail ?? "";
 
   const isEmail = channel === "email" || channel === "staff_email";
@@ -448,6 +453,32 @@ export async function triggerCommunications(
   const schoolId = loaded.staff.schoolId;
   if (!schoolId) return;
 
+  /**
+   * Who gets told, and whose calendar gets booked — now two questions.
+   *
+   * Until migration 327 they shared one column on `schools`, so a campus could
+   * notify exactly one person. `resolveSchoolAdmissionsContacts` reads the new
+   * table and falls back to those columns when it is empty or absent, so the
+   * behaviour of a school nobody has configured is unchanged.
+   *
+   * The booking contact overrides the merge context because a parent's mail is
+   * signed by, replies to, and books the calendar of ONE person. The
+   * notification list is separate and is used only as the staff recipient.
+   */
+  const contacts = await resolveSchoolAdmissionsContacts(supabase, schoolId, {
+    contactName: loaded.mergeCtx.admissionsContactName,
+    contactEmail: loaded.mergeCtx.admissionsContactEmail,
+    bookingUrl: loaded.mergeCtx.schedulingUrl,
+  });
+
+  loaded.mergeCtx = {
+    ...loaded.mergeCtx,
+    admissionsContactName: contacts.contactName,
+    admissionsContactEmail: contacts.contactEmail,
+    schedulingUrl: contacts.bookingUrl,
+    staffNotificationEmails: contacts.notificationEmails,
+  };
+
   const allTemplates = await getTemplatesForTrigger(supabase, schoolId, options.triggerEvent);
 
   /**
@@ -464,7 +495,9 @@ export async function triggerCommunications(
    * as a delivery to the empty string.
    */
   const hasBookingLink = Boolean(loaded.mergeCtx.schedulingUrl);
-  const hasStaffEmail = Boolean(loaded.mergeCtx.admissionsContactEmail);
+  const hasStaffEmail =
+    (loaded.mergeCtx.staffNotificationEmails ?? []).length > 0 ||
+    Boolean(loaded.mergeCtx.admissionsContactEmail);
 
   const templates = allTemplates.filter((t) => {
     if (t.template_key === "inquiry_thank_you_email") return hasBookingLink;

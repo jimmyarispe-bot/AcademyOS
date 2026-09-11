@@ -39,6 +39,12 @@ export interface MergeContext {
    */
   admissionsContactName?: string | null;
   admissionsContactEmail?: string | null;
+  /**
+   * Every address to notify when an inquiry arrives. Distinct from
+   * `admissionsContactEmail`, which is the one person who signs parent mail and
+   * whose calendar is booked — see migration 327.
+   */
+  staffNotificationEmails?: readonly string[];
   schedulingUrl?: string | null;
   /**
    * Shadow-days booking link. Deliberately not the same as schedulingUrl: tours
