@@ -45,6 +45,12 @@ function compare(
       return typeof left === "number" && typeof right === "number" && left <= right;
     case "in":
       return Array.isArray(right) && right.includes(left);
+    case "contains":
+      // Compared as strings: a multiselect answer arrives from FormData as
+      // string values, while a condition may carry a number or a boolean.
+      return (
+        Array.isArray(left) && left.some((entry) => String(entry) === String(right))
+      );
     default:
       return false;
   }

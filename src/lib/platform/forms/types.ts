@@ -27,6 +27,17 @@ export type FormConditionOperator =
   | "lte"
   | "exists"
   | "in"
+  /**
+   * The value at `path` is a list and it contains `value`.
+   *
+   * The mirror of `in`, which asks whether a single value appears in a list
+   * supplied by the condition. `contains` asks the same question of the answer
+   * rather than of the rule, which is what a multiselect needs: "did they tick
+   * GA GOAL?" is unanswerable with `eq` (the answer is an array, never equal to
+   * a string) and with `in` (which would compare the whole array against a
+   * list).
+   */
+  | "contains"
   | "empty";
 
 export type FormCondition = {

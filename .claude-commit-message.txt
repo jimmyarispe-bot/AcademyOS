@@ -1,33 +1,43 @@
-Admissions: every contact at a campus hears about an inquiry, one calendar gets booked
+Forms: a condition can ask what a multiselect contains, and Georgia uses it
 
-Migration 327 split the two jobs that schools.admissions_contact_email had been
-doing at once. This is the code that reads it.
+GA's scholarship question is a multiselect, and until now no condition could ask
+what one held. `eq` compares an array to a string and is never true. `in` asks
+whether the ANSWER appears in a list supplied by the rule — the opposite
+question. So "did this family tick GA GOAL?" was unanswerable, and every
+Georgia family would have seen the GOAL eligibility questions whether they were
+applying for it or not.
 
-Being told an inquiry arrived is a notification — three people can want it and
-nothing breaks when all three know. Being the name on a booking link is a
-commitment to one person's calendar. The engine now sends staff mail to every
-active contact with receives_notifications, while the booking contact alone
-signs parent mail, receives its replies, and supplies {{scheduling_link}}.
+A `contains` operator is added to the platform forms condition engine: the value
+at `path` is a list and it holds `value`, compared as strings because a
+multiselect arrives from FormData as strings while a rule may carry a number.
+Six tests, including the one that keeps it honest — an answer that is not a list
+returns false rather than throwing, which is what a question changed from select
+to multiselect leaves behind in older submissions.
 
-FALLBACK IS DELIBERATE AND PERMANENT, NOT A MIGRATION SHIM. If the table is
-empty for a school, or absent because 327 has not run where this is deployed,
-the school's own columns still answer. The error from the query is read rather
-than ignored: a missing table, a policy refusal and an empty result all arrive
-as an error object nobody is obliged to look at, and falling back silently on a
-refusal would mean one person keeps being notified while nobody ever learns why
-the other two are not.
+Interest form v6 then asks what Georgia actually asks:
 
-The existing drop-guard is extended rather than replaced. A staff template with
-no recipient anywhere is still dropped instead of queued as a delivery to the
-empty string.
+  * GA Special Needs collects the STUDENT ID as well as the award amount, and
+    both appear only when that scholarship is ticked. The amount was previously
+    shown to every Georgia family.
+  * GA GOAL gets its own section carrying the eligibility rule in the law's own
+    words, with a checkbox for each route to qualifying — the two base paths and
+    the five waivers of the six-week attendance requirement.
+  * A proof-of-income choice, and a FERPA acknowledgement that appears only when
+    the diagnosis waiver is ticked — a condition on a multiselect answer, which
+    is the new operator being used twice.
+  * The GOAL narrative now appears for GOAL and Academy-Based applicants only,
+    which is what the paper form says and what the question text already claimed.
 
-Verified against production before writing: all four campuses have exactly one
-contact and one booking contact, so this ships with behaviour unchanged. Adding
-a second person is now an insert.
+THE DOCUMENTS ARE NAMED BUT NOT UPLOADED. GOAL requires proof of income and one
+proof of eligibility per route, PDF/JPG/PNG. The form engine has no file field
+and uploads belong to the application stage, where a parent has an account and
+DocumentCenter already works. The section tells families exactly what to gather;
+collecting it is the next build.
 
-Seven tests cover the resolver, including the two paths that decide whether this
-is safe: an unreadable table falls back AND logs, and a school with no contact
-anywhere returns nothing to notify.
+NOT ADDED, DELIBERATELY: GOAL's document list implies a route the statute text
+does not mention — proof of an SSO scholarship award from another private
+school. That is an eligibility claim, not a wording choice, so it is flagged
+rather than invented.
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_014B9rkuWAq2petze3CoyFp6
