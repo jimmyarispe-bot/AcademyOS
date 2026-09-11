@@ -1,59 +1,45 @@
-Admissions: one form for four campuses, and a lead list you can click to
+Portal: a parent can see their own record, and change it
 
-Three changes that were written to disk but never staged, so the ship script
-found nothing to commit. They go out together.
+/portal/profile could neither read a guardian nor write one, and both failures
+were silent.
 
-1. NAVIGATION. ADMISSIONS_TABS and SUB_NAV rendered only inside
-   AdmissionsLegacyView. The default admissions page — the one the sidebar
-   opens — showed the work queue and nothing else, so the Lead List, Pipeline
-   Board, Executive view, Reporting, State Funding, Funding Programs,
-   Reconciliation, Automation, Workflows, Templates and Checklist Settings were
-   reachable only by typing ?view= or a sub-route by hand. Both rows move into
-   one AdmissionsNavigation component rendered on both screens, so a
-   destination added to either array appears everywhere.
+THE READ. It selected `relationship` from guardians. There is no such column —
+it is relationship_to_student. PostgREST rejects the whole select on an unknown
+column, supabase-js resolves with { data: null, error }, and the page
+destructured only data. So guardian was always null, every parent saw their name
+rendered as their email address and their phone as an em dash, and nothing was
+logged anywhere. The error is read now, and a page that cannot load a family's
+record says so instead of rendering a plausible-looking blank.
 
-2. INTEREST FORM v3 — the shared trunk. The four campus applications ask three
-   things inconsistently and no campus asks all three: FL, GA and Virtual ask
-   for a birthdate while HS asks for an AGE from a dropdown; all four ask for a
-   mailing address while JAG asked for none; only GA asks how a family heard
-   about the school. All three are now asked of everyone, once.
+THE WRITE. The save button called updatePortalPreferencesAction, which writes a
+notifications blob and an accessibility blob and never touches guardians. The
+form it belongs to is honestly labelled "Communication preferences" and was
+never wrong; what was missing was anywhere to change a name, an email or a phone
+number — the exact thing the go-live email will ask families to do.
 
-   AGE IS DERIVED, NEVER STORED. Age is not a fact about a person, it is a fact
-   about a person and today. Stored, it is wrong within a year and the row
-   cannot tell you whether it was ever right. ageFromDateOfBirth() is the one
-   place it is computed, with tests — including the one that matters: a
-   date-only string parsed as UTC lands on the previous day west of Greenwich
-   and ticks the age over early for every family in the United States.
+THE POLICY. guardians carried one policy, guardians_staff_all. Staff can see
+every guardian at a school they can access; a parent could see nothing,
+including themselves. Migration 330 adds SELECT on the row whose user_id is the
+signed-in user, and deliberately no UPDATE.
 
-3. INTEREST FORM v4 — the campus sections. visibleWhen has existed on sections
-   and questions since the engine was built and no published version ever set
-   it. Five sections now appear the moment a family picks their campus. School
-   ids are resolved by name inside the migration rather than pasted, because a
-   condition that matches nothing renders no section and logs no error.
+RLS secures rows, not columns. An update policy scoped to "your own row" would
+also let a parent working through the API set receives_billing,
+financial_responsibility_percent, custody_status or legal_restrictions on it.
+Those are the school's facts about a family, not the family's. So writes go
+through a server action that locates the row BY SESSION USER — never by an id
+from the form, which would be an id a caller could change — and sets four
+fields: first name, last name, email, phone.
 
-   Returning students are deliberately absent. GA's paper form branches on new
-   versus returning because paper cannot know who you are; JAG can. Returning
-   families sign in, and re-enrolment is its own flow.
+Saving clears needs_confirmation. The 77 rows built from billing data carry that
+flag so a human confirming them can be told from a machine guessing at them, and
+this is the human doing it. Those parents are also told plainly that the name
+came from billing records and may be wrong, rather than being shown a form that
+implies the school already knows who they are.
 
-   HS differs from its paper form by instruction: student email only, no mobile
-   number, and the 60-second video asked as written narrative instead.
-
-FOUR THINGS CAUGHT BY READING RATHER THAN ASSUMING, ANY OF WHICH WOULD HAVE
-SHIPPED LOOKING FINE:
-
-  * InterestFormRenderer only drew a multiselect when optionSource was
-    "funding_sources". A multiselect with plain options fell through to the
-    generic text input — a one-line box for a ten-option question.
-  * Those checkboxes need name attributes; the form submits new FormData(form),
-    which cannot see an unnamed input.
-  * The submit validator skips hidden questions before the required check, so
-    choosing GA is not rejected for leaving Florida's fields empty. Had it not,
-    the feature would have been dead on arrival.
-  * Nothing in JAG charges a card. The Square code is read-side only, so the
-    $100 application fee on all four forms still cannot be taken.
-
-No file uploads: the engine has no file field. Documents stay in the portal's
-DocumentCenter, where an inquiry does not block on a parent finding a PDF.
+STILL NOT USABLE, AND THE REASON IS NOT IN THIS COMMIT. Parents have no
+accounts: users holds five rows, all staff, and every guardian row has a null
+user_id. This policy matches nothing today. Parent account invitation is the
+fourth and last link in the chain, and it is the one that remains.
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_014B9rkuWAq2petze3CoyFp6

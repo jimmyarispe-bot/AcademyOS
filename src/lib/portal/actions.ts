@@ -9,6 +9,7 @@ import { writePlatformAudit } from "@/lib/platform/automation/audit";
 import { createPortalNotification } from "@/lib/portal/notifications";
 import { upsertUserPreferences } from "@/lib/platform/identity/preferences";
 import crypto from "crypto";
+import type { Json } from "@/types/database";
 
 export async function sendPortalMessageAction(formData: FormData) {
   const supabase = await createAuthClient();
@@ -272,6 +273,81 @@ export async function updatePortalPreferencesAction(formData: FormData) {
   await upsertUserPreferences(supabase, user.id, { notifications, accessibility });
   revalidatePath("/portal");
   return { success: true };
+}
+
+/**
+ * A parent correcting their own name, email and phone.
+ *
+ * WHY THE SERVICE ROLE RATHER THAN THE PARENT'S SESSION. Row-level security
+ * secures rows, not columns. Migration 330 gives a guardian SELECT on their own
+ * row and deliberately no UPDATE, because an update policy scoped to "your own
+ * row" would also let a parent working through the API set `receives_billing`,
+ * `financial_responsibility_percent`, `custody_status` or `legal_restrictions`
+ * on it. Those are the school's facts about a family, not the family's.
+ *
+ * So the column list lives here, in one readable place, and it is four fields.
+ *
+ * THE ROW IS FOUND BY SESSION USER, NEVER BY AN ID FROM THE FORM. A guardian id
+ * in the payload would be a guardian id a caller could change.
+ *
+ * Saving also clears `needs_confirmation`. The 77 rows built from billing data
+ * carry that flag precisely so that a human confirming them can be told apart
+ * from a machine guessing at them — and this is the human doing it.
+ */
+export async function updateMyGuardianContactAction(formData: FormData) {
+  const supabase = await createAuthClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const firstName = String(formData.get("first_name") ?? "").trim();
+  const lastName = String(formData.get("last_name") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim();
+  const phone = String(formData.get("phone") ?? "").trim();
+
+  if (!firstName || !lastName) {
+    return { error: "Please give both your first and last name." };
+  }
+
+  const { createServiceRoleClient } = await import("@/lib/supabase/server");
+  const admin = createServiceRoleClient();
+
+  const { data: guardian, error: findError } = await admin
+    .from("guardians")
+    .select("id, communication_preferences")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (findError) return { error: findError.message };
+  if (!guardian) {
+    return {
+      error:
+        "We could not find your family record. Please contact the school so we can link your account.",
+    };
+  }
+
+  // Typed as Json rather than unknown: this object goes back into a jsonb
+  // column, and Record<string, unknown> is not assignable to it.
+  const preferences: Record<string, Json> = {
+    ...((guardian.communication_preferences as Record<string, Json> | null) ?? {}),
+  };
+  delete preferences.needs_confirmation;
+  preferences.confirmed_by_parent_at = new Date().toISOString();
+
+  const { error } = await admin
+    .from("guardians")
+    .update({
+      first_name: firstName,
+      last_name: lastName,
+      email: email || null,
+      phone: phone || null,
+      communication_preferences: preferences,
+    })
+    .eq("id", guardian.id);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/portal/profile");
+  return { success: true as const };
 }
 
 export async function recordPortalLoginAction(studentIds: string[]) {
