@@ -52,9 +52,9 @@ export function JagLearningVideo({
       data-jag-learn-video="ready"
       data-jag-instructor={playback.instructorId}
     >
-      <div className="overflow-hidden rounded-lg border border-[var(--jag-border)] bg-black">
+      <div className="overflow-hidden rounded-lg border border-[var(--jag-border)] bg-[#000000] p-3">
         <video
-          className="aspect-video w-full max-h-[70vh]"
+          className="aspect-video w-full max-h-[70vh] bg-[#000000]"
           controls
           controlsList="nodownload"
           preload="metadata"

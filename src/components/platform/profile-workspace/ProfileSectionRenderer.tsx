@@ -46,5 +46,5 @@ export async function ProfileSectionRenderer({
     sectionKey,
   };
 
-  return Component(props);
+  return <Component {...props} />;
 }

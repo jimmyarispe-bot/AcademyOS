@@ -31,6 +31,25 @@ function asString(value: unknown): string {
 }
 
 /**
+ * Multiselect answers arrive as arrays. `String(["a","b"])` gives "a,b" — no
+ * space, no way to tell a two-value answer from one value containing a comma.
+ *
+ * v3 made `referral_source` a multiselect while keeping its
+ * `lead.referral_source` binding, so an array now reaches two text columns —
+ * the lead's and the submission's. Joining explicitly is the difference between
+ * a readable record and one that looks like a bug.
+ *
+ * The authoritative copy of the answer is still the array in
+ * `admissions_interest_answers`; both text columns are conveniences.
+ */
+function asJoinedString(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.map((entry) => asString(entry)).filter(Boolean).join(", ");
+  }
+  return asString(value);
+}
+
+/**
  * Fold the answers that have no column of their own onto `lead.referral_source`.
  *
  * The authoritative copy of every answer is `admissions_interest_answers`; this
@@ -42,7 +61,7 @@ function asString(value: unknown): string {
  * answer from any org still on version 1.
  */
 function encodeLeadReferralExtras(values: InterestFormValues): string | null {
-  const referral = asString(values.referral_source);
+  const referral = asJoinedString(values.referral_source);
   const preferred = asString(values.preferred_contact_method);
   const greatness = asString(values.student_greatness);
   const challenges = asString(values.student_challenges);
@@ -254,7 +273,7 @@ export async function submitPublishedInterestForm(
     formVersionId: published.formVersionId,
     // Server-owned submission metadata — do not trust arbitrary client source values.
     source: EXPRESS_INTEREST_SUBMISSION_SOURCE,
-    referralSource: asString(visible.referral_source) || null,
+    referralSource: asJoinedString(visible.referral_source) || null,
     values: visible,
   });
 

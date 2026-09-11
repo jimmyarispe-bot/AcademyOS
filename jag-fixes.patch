@@ -1,0 +1,745 @@
+diff --git a/docs/STUDIO_SCANNER_API_BLINDSPOT.md b/docs/STUDIO_SCANNER_API_BLINDSPOT.md
+index f4c40da..a615581 100644
+--- a/docs/STUDIO_SCANNER_API_BLINDSPOT.md
++++ b/docs/STUDIO_SCANNER_API_BLINDSPOT.md
+@@ -1,7 +1,8 @@
+ # Studio repository scanner: the API surface it never enriches
+ 
+-Status: **diagnosed, fix validated, not shipped.** Blocked on the test-runtime
+-problem in the last section, not on the fix itself.
++Status: **diagnosed, validated in a container, ready to ship.** One file,
++29 lines. An earlier attempt was reverted for reasons that turned out to be
++measurement error - see the correction below.
+ 
+ ## Symptom
+ 
+@@ -71,7 +72,14 @@ Verified serially (`--no-file-parallelism`): `js002`, `js003` and
+ `repository-intelligence` fully green; the `js004`/`js005` graphs build with the
+ API layer present. Seven tests go from red to green on the enrichment fix alone.
+ 
+-## Why it is not shipped
++## Shippable
++
++Validated in a container against the same commit: seven tests fixed, none broken,
++no timeout changes needed. The cost is ~5 minutes of extra suite time on the four
++Studio files. On slow hardware those files were already ~15 minutes and will get
++worse; run them in CI rather than locally if that matters.
++
++## Historical note: why the first attempt was reverted
+ 
+ Restoring ~300 API nodes and their edges makes the graph real, and the
+ graph-traversal tests scale with it. Their timeouts were calibrated against a
+@@ -88,45 +96,52 @@ will not hold still:
+ A ~2x swing between identical runs. Any ceiling picked for it is a guess, and
+ raising it further only hides the real problem.
+ 
+-## Caveat: the measurements above are contaminated
++## Measured properly (container, Linux, same commit)
+ 
+-Taken at the end of the session, with the scanner fix fully reverted and the
+-tree byte-identical to HEAD, the same machine produced:
++The earlier numbers in this document were taken on a Windows laptop that drifted
++~5x slower over one session, and are not a clean attribution. Re-measured in a
++cloud container where the whole suite runs in minutes:
+ 
+-| Test (unchanged code) | first measurement | end of session |
++| | baseline (458a82f) | with the fix |
+ |---|---|---|
+-| `js003 governance dashboard` | 27.9s | 148.1s |
+-| `js005 graph health dashboard` | 42.7s | 222.8s |
++| unit suite failures | 24 | **17** |
++| unit suite wall | 333s | 647s |
++
++Exactly seven tests go green - `js002` x3, `js004`, `js005` x2,
++`repository-intelligence` - with no new failures. `studio-foundation` still
++fails on `missingDocumentation`, which is unrelated to the scanner.
+ 
+-~5x slower on identical code, over a few hours. Long test runs, background
+-Vercel builds and thermal state all move this number, so any before/after
+-comparison in this document that spans hours overstates the cost of the fix.
+-The extra reads are real - enrichment goes from ~400 files to ~705 - but the
+-2x-to-4x figures quoted above are not a clean attribution.
++**No timeout changes are required.** The heaviest test peaks at ~102s against
++its existing 120s ceiling. The +314s is entirely the four Studio files, which go
++from ~100s to ~341s combined because the knowledge graph now contains the API
++layer it was always supposed to contain.
+ 
+-Before deciding anything about this fix on performance grounds, re-measure both
+-arms back to back on an idle machine, serially, in one sitting.
++The file-content cache described in earlier drafts was dropped: it recovered
++~30% on the Windows machine's slow I/O and **nothing** in the container
++(97.1s -> 101.8s, inside the noise). It was optimising a machine, not the code.
+ 
+-## The real blocker: per-test escalation
++## Correction: there is no per-test escalation
+ 
+-Within a single file, each test costs roughly double the one before it, though
+-every test calls `resetStudioStoreForTests()` first:
++An earlier version of this document claimed that each test in these files costs
++roughly double the one before it, and that something accumulates which
++`resetStudioStoreForTests()` fails to clear. **That was wrong.** Measured by
++running each test in isolation and comparing against its time in sequence:
+ 
+-| | before the fix | after |
++| test | alone | in sequence |
+ |---|---|---|
+-| test 1 | 8.2s | 18.3s |
+-| test 2 | 8.5s | 23.6s |
+-| test 3 | 27.0s | 44.8s |
+-| test 4 | 43.2s | 137.9s |
+-| test 5 | 42.7s | 457.5s |
+-
+-**This predates the scanner fix** (see the left column) - the fix amplifies it, it
+-does not cause it. Something accumulates across tests that
+-`resetStudioStoreForTests()` does not clear.
+-
+-Fix this first. It is why the Studio suite takes ~15 minutes serially, it makes
+-every ceiling in these files guesswork, and once it is fixed the scanner fix
+-above costs almost nothing and can land as-is.
++| densifies relationships | 3793ms | 3724ms |
++| RC-3 readiness | 7489ms | 7114ms |
++| generates recommendations | 11387ms | 11232ms |
++| exposes graph health | 27583ms | 26903ms |
++
++Identical. Nothing leaks. Instrumenting `afterEach` confirms every Studio global
++(`__jagStudioStore`, `Certifications`, `Approvals`, `Policies`, `QualityWeights`,
++`KnowledgeGraph`, `KnowledgeHealthTrend`, catalog snapshot, scan cache) is empty
++after each test, and heap does not grow monotonically.
++
++The tests are simply ordered cheapest to most expensive, which reads like
++doubling. They are individually slow because each rebuilds the repository scan
++and knowledge graph from disk - which is inherent to what they assert, not a bug.
+ 
+ ## Related, separate
+ 
+diff --git a/docs/studio/26_DECISION_CENTER.md b/docs/studio/26_DECISION_CENTER.md
+new file mode 100644
+index 0000000..36b596e
+--- /dev/null
++++ b/docs/studio/26_DECISION_CENTER.md
+@@ -0,0 +1,62 @@
++# Decision Center
++
++Studio's executive surface — one evidence context, several views over it.
++
++Every view is derived from repository and Studio evidence. Nothing is sampled,
++estimated, or fetched from git; if a claim appears in a view, an `evidence` array
++names where it came from.
++
++## Shared evidence context
++
++`buildDecisionEvidenceContext(root?)` assembles the inputs every view needs —
++architecture violations, dependency analysis, coverage, PERs, products and the
++knowledge graph — and caches the result keyed by repository root.
++
++```ts
++import {
++  buildDecisionEvidenceContext,
++  clearDecisionEvidenceContext,
++} from "@studio";
++
++const ctx = buildDecisionEvidenceContext(root);
++```
++
++Pass `ctx` into the builders below to compute several views from one pass.
++Omit it and each builder assembles its own. `clearDecisionEvidenceContext()`
++drops the cache — needed only when the tree changes mid-process.
++
++## Views
++
++| Builder | Returns | Documented in |
++|---------|---------|---------------|
++| `buildDecisionOverview` | `DecisionOverview` — health scores, quality, counts | this file |
++| `buildProductDecisionCards` | `ProductDecisionCard[]` — per-product posture | this file |
++| `buildReleaseDecisionViews` | `ReleaseDecisionView[]` — gate/approval state | [15_RELEASES](15_RELEASES.md) |
++| `buildDecisionRecommendations` | `DecisionRecommendation[]` | [25_ENGINEERING_RECOMMENDATIONS](25_ENGINEERING_RECOMMENDATIONS.md) |
++| `buildRiskCenter` | `RiskCenterView` | [27_RISK_CENTER](27_RISK_CENTER.md) |
++| `buildPerCenter` | `PerCenterView` | [05_PER_ENGINE](05_PER_ENGINE.md) |
++| `buildEngineeringTimeline` | `TimelineEvent[]` | [29_TIMELINE](29_TIMELINE.md) |
++| `buildActivityFeed` | `ActivityItem[]` | [28_ACTIVITY_FEED](28_ACTIVITY_FEED.md) |
++
++## Overview fields
++
++`DecisionOverview` carries the numbers the dashboard leads with:
++
++- `platformHealth`, `studioHealth`, `knowledgeGraphHealth` (0–100)
++- `overallQualityScore` — see [17_QUALITY](17_QUALITY.md)
++- `repositoryFreshness` — timestamp of the scan behind the view
++- `topRisks`, `openPers`, `releaseReadyCount`
++- `products` — the per-product cards
++
++## Dashboard
++
++`buildDecisionCenter(root?)` composes every view into one
++`DecisionCenterDashboard`, sharing a single evidence context so the repository is
++scanned once rather than once per view. `createDecisionCenterService()` wraps it
++for callers that want a service handle.
++
++## Determinism
++
++Given an unchanged tree the same inputs produce the same output. Ids are derived
++from content (`risk:api:undoc`, `tl:release:<id>`), not from insertion order or
++timestamps, so views can be diffed across runs.
+diff --git a/docs/studio/27_RISK_CENTER.md b/docs/studio/27_RISK_CENTER.md
+new file mode 100644
+index 0000000..9406652
+--- /dev/null
++++ b/docs/studio/27_RISK_CENTER.md
+@@ -0,0 +1,55 @@
++# Risk Center
++
++Aggregated engineering risk with categories, severities and a score trend.
++
++`buildRiskCenter(root?, ctx?)` returns a `RiskCenterView`. Every `RiskItem`
++carries an `evidence` array naming the violation, cycle, PER or path it came
++from — no risk is asserted without a source.
++
++## Categories
++
++| Category | Raised when | Severity |
++|----------|-------------|----------|
++| `architecture` | Architecture violations (first 20) | Mirrors the violation |
++| `dependency` | `riskScore > 40` | `Error` at ≥70, else `Warning` |
++| `dependency` | Each circular dependency (first 5) | `Error` |
++| `per` | Open or Accepted PERs exist | `Warning` at ≥10, else `Info` |
++| `connector` | Dependency issues matching `/connector/i` | `Warning` |
++| `testing` | Untested services exist | `Error` at >20, else `Warning` |
++| `api` | Undocumented APIs exist | `Warning` |
++| `technical_debt` | untested + undocumented + open PERs > 0 | `Warning` at >40, else `Info` |
++| `documentation` | Stale doc markers, or >50 undocumented APIs | `Info` |
++
++## Score
++
++```
++riskScore = min(100, Σ weight(severity))
++weight: Info=1, Warning=3, Error=8, Critical=15
++```
++
++The cap matters: a repository with many low-severity findings cannot present as
++more urgent than one with a handful of critical ones.
++
++## Trend
++
++Each call appends `{ at, riskScore }` to an in-process trend, retained to the
++last **30** entries and returned as `trends`. It is process-local and not
++persisted — a fresh process starts with an empty trend.
++
++`clearDecisionRiskTrend()` empties it. Note this is *not* cleared by
++`resetStudioStoreForTests()`; call it directly if a test asserts on trend length.
++
++## Shape
++
++```ts
++type RiskCenterView = {
++  generatedAt: string;
++  risks: readonly RiskItem[];
++  countsByCategory: Readonly<Record<string, number>>;
++  trends: readonly { at: string; riskScore: number }[];
++};
++```
++
++`trend` on an individual `RiskItem` (`up` | `down` | `flat`) is a per-item
++direction hint. Only elevated dependency risk currently reports `up`; the rest
++report `flat`.
+diff --git a/docs/studio/28_ACTIVITY_FEED.md b/docs/studio/28_ACTIVITY_FEED.md
+new file mode 100644
+index 0000000..fd9d5b7
+--- /dev/null
++++ b/docs/studio/28_ACTIVITY_FEED.md
+@@ -0,0 +1,41 @@
++# Activity Feed
++
++Recent Studio activity assembled from stored evidence — **no git required**.
++
++`buildActivityFeed({ root?, limit?, ctx? })` returns `ActivityItem[]`, newest
++first. `limit` defaults to **50**.
++
++## Sources
++
++| Source | Emits | Kind |
++|--------|-------|------|
++| Releases (`listReleases()`) | One item per release | `release` |
++| Releases with `certifiedAt` | Certification event | `certification` |
++| Release `migrationHistory` (first 8) | One item per entry | `commit` |
++| Certification history (last 5 per product) | Stage changes with actor | `certification` |
++| PERs | Current status per PER | `per` |
++
++Certification records are read with `{ lightweight: true }` so building the feed
++does not trigger a full gate evaluation per product.
++
++## Shape
++
++```ts
++type ActivityItem = {
++  id: string;
++  at: string;
++  kind: "commit" | "release" | "certification" | "per" | "documentation" | "recommendation";
++  summary: string;
++  evidence: readonly string[];
++};
++```
++
++Ids are content-derived (`act:release:<id>`, `act:certhist:<product>:<at>`), so
++the same tree yields the same feed and repeat entries collapse rather than
++accumulate.
++
++## Note on `commit`
++
++The `commit` kind does not come from version control. It reports migration and
++history entries recorded on a release — the name reflects how it reads in the
++feed, not its source. Studio never shells out to git.
+diff --git a/docs/studio/29_TIMELINE.md b/docs/studio/29_TIMELINE.md
+new file mode 100644
+index 0000000..0700ce2
+--- /dev/null
++++ b/docs/studio/29_TIMELINE.md
+@@ -0,0 +1,46 @@
++# Engineering Timeline
++
++Milestones reconstructed from repository and Studio evidence.
++
++`buildEngineeringTimeline(root?, ctx?)` returns `TimelineEvent[]`, newest first.
++
++## Event sources
++
++| Source | Title | Kind |
++|--------|-------|------|
++| Releases | `<product> <status> <version>` | `release` |
++| Certification history | `<product>: <note>` | `certification` |
++| PERs promoted / implemented | Promotion or status change | `per` |
++| Docs matching `rc2` / `rc-2` | RC-2 Complete | `release` |
++| Docs matching `18_knowledge` / `knowledge_graph` | JS-004 Complete | `sprint` |
++| Docs matching `23_graph_health` / `25_engineering` | JS-005 Complete | `sprint` |
++| Knowledge graph build | Refresh with node/edge counts | `knowledge` |
++| AcademyOS at RC-2 | RC-3 track active | `release` |
++
++Release events are dated by the most meaningful stamp available:
++`certifiedAt ?? releasedAt ?? createdAt`.
++
++## Deduplication and order
++
++Events are keyed by id in a `Map` before being returned, so a milestone derived
++from two sources appears once. The result is sorted by `at` descending, with id
++as a stable tiebreak — two events at the same instant keep a deterministic order
++across runs.
++
++## Shape
++
++```ts
++type TimelineEvent = {
++  id: string;
++  at: string;
++  title: string;
++  kind: "release" | "sprint" | "per" | "certification" | "documentation" | "knowledge" | "other";
++  evidence: readonly string[];
++};
++```
++
++## Why documentation drives sprint milestones
++
++Sprint completion is inferred from the presence of the docs that sprint was
++required to produce. This makes the timeline self-correcting: delete the docs and
++the milestone disappears, which is the intended signal rather than a bug.
+diff --git a/packages/studio/policies/engine.ts b/packages/studio/policies/engine.ts
+index a2bf603..1618941 100644
+--- a/packages/studio/policies/engine.ts
++++ b/packages/studio/policies/engine.ts
+@@ -150,29 +150,46 @@ function evaluateOne(
+       const securitySuites = testing.suites.some((s) =>
+         /security|hardening/i.test(s.name)
+       );
+-      const passed =
+-        critical.length === 0 &&
+-        (productId !== "academyos" ||
+-          securitySuites ||
+-          existsSync(
+-            /* turbopackIgnore: true */ join(
+-              /* turbopackIgnore: true */ root,
+-              "docs",
+-              "academyos",
+-              "rc2"
+-            )
+-          ));
++      const noCritical = critical.length === 0;
++      const docsEvidence = existsSync(
++        /* turbopackIgnore: true */ join(
++          /* turbopackIgnore: true */ root,
++          "docs",
++          "academyos",
++          "rc2"
++        )
++      );
++      const hasValidationEvidence =
++        productId !== "academyos" || securitySuites || docsEvidence;
++      const passed = noCritical && hasValidationEvidence;
++
++      /**
++       * Report the reason that actually applies. This previously returned
++       * score=100 with "0 Critical finding(s) block release." whenever it failed
++       * for missing validation evidence - a passing score and a contradictory
++       * message on a failing gate, which is close to unreadable when triaging.
++       */
+       return {
+         policyId: policy.id,
+         passed,
+-        score: passed ? 100 : Math.max(0, 100 - critical.length * 25),
++        score: passed
++          ? 100
++          : noCritical
++            ? 60
++            : Math.max(0, 100 - critical.length * 25),
+         evidence: Object.freeze([
+           `criticalIssues=${critical.length}`,
+-          securitySuites ? "security suite present" : "security suite inferred from docs",
++          securitySuites
++            ? "security suite present"
++            : docsEvidence
++              ? "security suite inferred from docs"
++              : "no security suite or docs evidence",
+         ]),
+         detail: passed
+           ? "Security validation satisfied."
+-          : `${critical.length} Critical finding(s) block release.`,
++          : !noCritical
++            ? `${critical.length} Critical finding(s) block release.`
++            : "No Critical findings, but no permission-validation evidence: no suite matching /security|hardening/ and no docs/academyos/rc2.",
+       };
+     }
+     case "no_circular_dependencies": {
+diff --git a/packages/studio/repository/intelligence.ts b/packages/studio/repository/intelligence.ts
+index d3251b6..9bb76fc 100644
+--- a/packages/studio/repository/intelligence.ts
++++ b/packages/studio/repository/intelligence.ts
+@@ -216,7 +216,29 @@ export function buildRepositoryIntelligence(
+       e.path.startsWith("src/app/api/")
+   );
+ 
+-  for (const entry of enrichTargets.slice(0, 400)) {
++  /**
++   * This budget used to be a flat `.slice(0, 400)` over enrichTargets, applied
++   * in scan order. SCAN_ROOTS lists `packages` first and `src/app/api` ninth, so
++   * once packages/ outgrew the budget on its own, not one route handler was ever
++   * enriched and only the first package.json was parsed - apiRoutes came back
++   * empty and dependencyGraph held a single entry, silently. A threshold the
++   * repository quietly grew past.
++   *
++   * Structural entries are few and load-bearing - package manifests produce the
++   * dependency graph, route handlers produce the API surface - so enrich all of
++   * them and spend the tail budget on everything else. The tail keeps its
++   * original size, so nothing that relied on it loses input.
++   */
++  const TAIL_ENRICH_BUDGET = 400;
++  const isStructural = (e: RepositoryIndexEntry): boolean =>
++    (e.kind === "package" && e.path.endsWith("package.json")) ||
++    e.path.startsWith("src/app/api/");
++
++  const structural = enrichTargets.filter(isStructural);
++  const tail = enrichTargets.filter((e) => !isStructural(e));
++  const tailEnriched = tail.slice(0, TAIL_ENRICH_BUDGET);
++
++  for (const entry of [...structural, ...tailEnriched]) {
+     enrichFromContent(repoRoot, entry, symbols, apiRoutes);
+     if (entry.kind === "package" && entry.path.endsWith("package.json") && entry.packageId) {
+       const graph = parsePackageJson(repoRoot, entry.packageId, entry.path);
+@@ -234,6 +256,12 @@ export function buildRepositoryIntelligence(
+   if (dependencyGraph.length < 1) {
+     recommendations.push("No package dependency graphs parsed.");
+   }
++  if (tail.length > tailEnriched.length) {
++    // Silent truncation is what made the original cap so hard to see.
++    recommendations.push(
++      `Enrichment budget reached - ${tail.length - tailEnriched.length} non-structural entries were left unparsed.`
++    );
++  }
+   if (scan.counts.test > 0 && scan.counts.doc === 0) {
+     recommendations.push("Tests present without docs — improve documentation coverage.");
+   }
+diff --git a/packages/studio/testing/workspace.ts b/packages/studio/testing/workspace.ts
+index 9305467..c7deb1a 100644
+--- a/packages/studio/testing/workspace.ts
++++ b/packages/studio/testing/workspace.ts
+@@ -87,6 +87,19 @@ const SUITE_DEFS: {
+     domain: "Studio",
+     match: (p) => domainFor(p) === "Studio",
+   },
++  /**
++   * Matched by path, not by domainFor - security tests live under tests/**\/security/
++   * and classify as "Other", which no other suite claims, so they were invisible
++   * to the workspace entirely. That also made the `required_security_validation`
++   * policy unreachable: it looks for a suite whose name matches /security|hardening/,
++   * and no such suite existed.
++   */
++  {
++    id: "security",
++    name: "Security",
++    domain: "Foundation",
++    match: (p) => /(^|\/)security\//.test(p) || /hardening/i.test(p),
++  },
+ ];
+ 
+ export function buildTestingWorkspace(root?: string): TestingWorkspaceView {
+diff --git a/scripts/ci/nightly-suite-report.mjs b/scripts/ci/nightly-suite-report.mjs
+new file mode 100644
+index 0000000..785ce4a
+--- /dev/null
++++ b/scripts/ci/nightly-suite-report.mjs
+@@ -0,0 +1,117 @@
++#!/usr/bin/env node
++/**
++ * Nightly suite report — run the unit suite and diff it against a committed
++ * baseline of known failures.
++ *
++ * Reports; never gates. Exit code is informational only:
++ *   0  no new failures
++ *   1  new failures relative to the baseline
++ *   2  the run itself collapsed (could not judge)
++ *
++ * The baseline is the CONTAINER baseline - a clean clone on Linux with no
++ * .env.local. It deliberately differs from tests/known-failures.json, which is
++ * recorded on a developer machine. This one is what CI and any fresh clone see.
++ *
++ *   node scripts/ci/nightly-suite-report.mjs
++ *   node scripts/ci/nightly-suite-report.mjs --update-baseline
++ */
++
++import { execFileSync } from "node:child_process";
++import { existsSync, readFileSync, writeFileSync, mkdtempSync } from "node:fs";
++import { join } from "node:path";
++import { tmpdir } from "node:os";
++
++const BASELINE = "tests/known-failures.container.json";
++const MIN_TESTS = 2000; // a run reporting fewer than this did not really run
++const updating = process.argv.includes("--update-baseline");
++
++const out = join(mkdtempSync(join(tmpdir(), "suite-")), "results.json");
++
++let ran = true;
++try {
++  execFileSync(
++    "npx",
++    ["vitest", "run", "tests/unit", "--reporter=json", `--outputFile=${out}`, "--no-color"],
++    { stdio: "ignore", timeout: 45 * 60 * 1000 }
++  );
++} catch {
++  ran = false; // non-zero exit is expected when tests fail; the JSON is what matters
++}
++
++if (!existsSync(out)) {
++  console.log("## Suite report\n\n**The run produced no JSON report.** Could not judge.");
++  process.exit(2);
++}
++
++const report = JSON.parse(readFileSync(out, "utf8"));
++const total = report.numTotalTests ?? 0;
++const passed = report.numPassedTests ?? 0;
++
++const current = [];
++for (const file of report.testResults ?? []) {
++  const rel = file.name.replace(`${process.cwd()}/`, "").replace(/\\/g, "/");
++  for (const a of file.assertionResults ?? []) {
++    if (a.status === "failed") current.push(`${rel} :: ${a.fullName}`);
++  }
++}
++current.sort();
++
++if (total < MIN_TESTS) {
++  console.log(
++    `## Suite report\n\n**Only ${total} tests ran** (expected at least ${MIN_TESTS}).\n` +
++      "The run collapsed rather than passing - treat this as a broken run, not a clean one."
++  );
++  process.exit(2);
++}
++
++if (updating) {
++  writeFileSync(BASELINE, `${JSON.stringify(current, null, 2)}\n`);
++  console.log(`Baseline written: ${BASELINE} (${current.length} known failures)`);
++  process.exit(0);
++}
++
++let baseline = [];
++let haveBaseline = false;
++if (existsSync(BASELINE)) {
++  baseline = JSON.parse(readFileSync(BASELINE, "utf8"));
++  haveBaseline = true;
++}
++
++const baseSet = new Set(baseline);
++const curSet = new Set(current);
++const appeared = current.filter((t) => !baseSet.has(t));
++const fixed = baseline.filter((t) => !curSet.has(t));
++
++const lines = [];
++lines.push("## Suite report");
++lines.push("");
++lines.push(`- **${passed} passed / ${total} total**, ${current.length} failing`);
++if (haveBaseline) {
++  lines.push(`- Baseline: ${baseline.length} known failures`);
++  lines.push(`- **New: ${appeared.length}** · Fixed: ${fixed.length}`);
++} else {
++  lines.push(`- No ${BASELINE} found - reporting absolute state only.`);
++}
++lines.push("");
++
++if (appeared.length) {
++  lines.push("### New failures — not in the baseline");
++  lines.push("");
++  for (const t of appeared) lines.push(`- \`${t}\``);
++  lines.push("");
++}
++if (fixed.length) {
++  lines.push("### Newly passing — baseline is stale");
++  lines.push("");
++  for (const t of fixed) lines.push(`- \`${t}\``);
++  lines.push("");
++  lines.push("Prune with `node scripts/ci/nightly-suite-report.mjs --update-baseline`.");
++  lines.push("");
++}
++if (!appeared.length && !fixed.length && haveBaseline) {
++  lines.push("No change since the baseline.");
++  lines.push("");
++}
++
++console.log(lines.join("\n"));
++process.exit(appeared.length ? 1 : 0);
+diff --git a/src/lib/exec/navigation.ts b/src/lib/exec/navigation.ts
+index ae3d78c..dd8fda0 100644
+--- a/src/lib/exec/navigation.ts
++++ b/src/lib/exec/navigation.ts
+@@ -17,10 +17,16 @@ export const EXEC_NAV: ExecNavItem[] = [
+   { id: "brief", label: "Brief", href: "/exec/brief", phase: 1 },
+   { id: "health", label: "Health", href: "/exec/health", phase: 1 },
+   { id: "wisdom", label: "Wisdom", href: "/exec/wisdom", phase: 1 },
++  // /exec/graph exists and redirects to live Mission Control - it was built,
++  // just never linked from the primary nav.
++  { id: "graph", label: "Graph", href: "/exec/graph", phase: 1 },
+   { id: "opportunities", label: "Opportunities", href: "/exec/opportunities", phase: 1 },
+   { id: "risks", label: "Risks", href: "/exec/risks", phase: 1 },
+   { id: "integrations", label: "Integrations", href: "/exec/integrations", phase: 1 },
+   { id: "ask", label: "Ask JAG", href: "/exec/ask", phase: 1 },
++  // Phase 2: declared but deliberately not shipped - no route exists yet, and
++  // EXEC_NAV_ENABLED filters it out. Keeps staged intent visible in one place.
++  { id: "timeline", label: "Timeline", href: "/exec/timeline", phase: 2 },
+ ];
+ 
+ /** Only ship routes that exist and are production-ready. */
+diff --git a/tests/known-failures.container.json b/tests/known-failures.container.json
+new file mode 100644
+index 0000000..07cc716
+--- /dev/null
++++ b/tests/known-failures.container.json
+@@ -0,0 +1,11 @@
++[
++  "tests/unit/jag-platform/platform-users.test.ts :: JAG platform user access leaves AcademyOS user-management catalog unchanged",
++  "tests/unit/platform/crud-standards.test.ts :: entity capability registry marks archive preferred and hard-delete rules correctly",
++  "tests/unit/platform/identity/jag-org-staff-access.test.ts :: JAG_ORG_STAFF narrow dual-product access can enter AcademyOS dashboard routes",
++  "tests/unit/platform/identity/jag-org-staff-access.test.ts :: JAG_ORG_STAFF narrow dual-product access can enter The JAG as an org operator (not platform steward)",
++  "tests/unit/platform/identity/jag-org-staff-access.test.ts :: JAG_ORG_STAFF narrow dual-product access cannot access finance routes or finance entry",
++  "tests/unit/platform/identity/jag-org-staff-access.test.ts :: JAG_ORG_STAFF narrow dual-product access does not expose Mentor; migration display_name is Staff",
++  "tests/unit/platform/identity/jag-org-staff-access.test.ts :: JAG_ORG_STAFF narrow dual-product access grants only JAG_ORG_ACCESS and ACADEMYOS_ACCESS groups",
++  "tests/unit/platform/identity/jag-org-staff-access.test.ts :: JAG_ORG_STAFF narrow dual-product access migration seeds Staff display name and narrow grants only",
++  "tests/unit/platform/identity/jag-org-staff-access.test.ts :: JAG_ORG_STAFF narrow dual-product access resolves entry permissions and excludes privileged catalog gates"
++]
+diff --git a/tests/unit/calendar/lifecycle.test.ts b/tests/unit/calendar/lifecycle.test.ts
+index 6778df8..0c5c181 100644
+--- a/tests/unit/calendar/lifecycle.test.ts
++++ b/tests/unit/calendar/lifecycle.test.ts
+@@ -34,6 +34,15 @@ import { ACTIVITY_EVENT_CATALOG } from "@/lib/platform/activity/catalog";
+ import { WORKFLOW_ACTION_LIBRARY } from "@/lib/workflows/actions";
+ 
+ const EVENT_ID = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
++
++/**
++ * Reminder scheduling drops offsets whose remind_at has already passed, so this
++ * fixture has to stay in the future. It was hard-coded to 2026-07-22 and quietly
++ * stopped exercising the upsert path the day that date elapsed - the test kept
++ * asserting on an empty array. Keep it relative to the run.
++ */
++const FUTURE_START = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
++const FUTURE_END = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000 + 3_600_000).toISOString();
+ const TEACHER_ID = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+ const STUDENT_ID = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+ const RESOURCE_ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+@@ -231,8 +240,8 @@ describe("event lifecycle + EI events", () => {
+             organization_id: TEST_UUIDS.organization,
+             family_id: null,
+             student_ids: [],
+-            starts_at: "2026-07-22T15:00:00.000Z",
+-            ends_at: "2026-07-22T16:00:00.000Z",
++            starts_at: FUTURE_START,
++            ends_at: FUTURE_END,
+           },
+           error: null,
+         };
+@@ -247,8 +256,8 @@ describe("event lifecycle + EI events", () => {
+     const result = await createCalendarEvent(supabase as never, {
+       title: "Staff meeting",
+       eventType: "staff_meeting",
+-      startsAt: "2026-07-22T15:00:00.000Z",
+-      endsAt: "2026-07-22T16:00:00.000Z",
++      startsAt: FUTURE_START,
++      endsAt: FUTURE_END,
+       schoolId: TEST_UUIDS.school,
+       skipConflictCheck: true,
+     });
+diff --git a/tests/unit/jag-command-center/capability-sdk.test.ts b/tests/unit/jag-command-center/capability-sdk.test.ts
+index 8e05438..91a78e1 100644
+--- a/tests/unit/jag-command-center/capability-sdk.test.ts
++++ b/tests/unit/jag-command-center/capability-sdk.test.ts
+@@ -20,6 +20,10 @@ const session: JagPlatformSession = {
+   displayName: "JAG Founder",
+   role: "FOUNDER",
+   issuedAt: "2026-01-01T00:00:00.000Z",
++  // Required since Foundation II tenant isolation; the search catalog is
++  // authority-scoped, so a fixture without it silently returns an empty catalog.
++  authority: "platform",
++  organizationId: null,
+ };
+ 
+ describe("Capability SDK Command Center (Sprint 207)", () => {
+diff --git a/tests/unit/jag-command-center/rc1-hardening.test.ts b/tests/unit/jag-command-center/rc1-hardening.test.ts
+index 776262c..e3f3480 100644
+--- a/tests/unit/jag-command-center/rc1-hardening.test.ts
++++ b/tests/unit/jag-command-center/rc1-hardening.test.ts
+@@ -23,6 +23,11 @@ const session: JagPlatformSession = {
+   displayName: "JAG Founder",
+   role: "FOUNDER",
+   issuedAt: "2026-01-01T00:00:00.000Z",
++  // Required since Foundation II tenant isolation. Notifications with a null
++  // organizationId are platform-scoped and only readable by a platform steward,
++  // so a founder fixture must declare that authority explicitly.
++  authority: "platform",
++  organizationId: null,
+ };
+ 
+ describe("RC-001 hardening (audit, notifications, search)", () => {
+@@ -61,10 +66,10 @@ describe("RC-001 hardening (audit, notifications, search)", () => {
+       href: "/jag/briefings/abc",
+       briefingId: "abc",
+     });
+-    expect(countUnreadJagNotifications()).toBe(1);
+-    expect(listJagNotifications()[0]!.kind).toBe("brief_ready");
+-    markAllJagNotificationsRead();
+-    expect(countUnreadJagNotifications()).toBe(0);
++    expect(countUnreadJagNotifications(session)).toBe(1);
++    expect(listJagNotifications(session)[0]!.kind).toBe("brief_ready");
++    markAllJagNotificationsRead(session);
++    expect(countUnreadJagNotifications(session)).toBe(0);
+   });
+ 
+   it("builds a searchable catalog covering executive surfaces", () => {
+diff --git a/tests/unit/platform/crud-standards.test.ts b/tests/unit/platform/crud-standards.test.ts
+index 309db40..08ab463 100644
+--- a/tests/unit/platform/crud-standards.test.ts
++++ b/tests/unit/platform/crud-standards.test.ts
+@@ -142,7 +142,10 @@ describe("CRUD completion gate", () => {
+     // Admission is registered but partial — capability may or may not meet matrix;
+     // release status must not be complete until compliant.
+     expect(getEntityReleaseStatus("admission")).toBe("partial");
+-    expect(getEntityReleaseStatus("document")).toBe("partial");
++    // `document` was partial when this test was written and has since passed the
++    // completion gate (see "validateCrudCompletionGate passes for current release
++    // map"). Assert against an entity that is still genuinely partial instead.
++    expect(getEntityReleaseStatus("notification")).toBe("partial");
+ 
+     const unknown = canMarkModuleComplete("not_a_real_entity" as never);
+     expect(unknown.ok).toBe(false);

@@ -67,7 +67,9 @@
     "db:bootstrap:greenfield": "node scripts/greenfield/bootstrap-greenfield.mjs",
     "db:bootstrap:verify": "node scripts/greenfield/verify-greenfield-live.mjs",
     "db:migrate:forward": "node scripts/greenfield/apply-forward-migrations.mjs",
-    "test:greenfield": "vitest run tests/unit/greenfield"
+    "test:greenfield": "vitest run tests/unit/greenfield",
+    "heygen:videos": "tsx scripts/heygen/cli.mts",
+    "jag-learn:ingest-videos": "tsx scripts/jag-learn/ingest-heygen-videos.mts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",

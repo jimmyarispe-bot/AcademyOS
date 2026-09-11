@@ -22,6 +22,7 @@ import type {
 import { FundingSourceCheckboxes } from "@/components/ui/FundingSourceCheckboxes";
 import { ActionButton, useActionFeedback } from "@/components/experience-system/feedback";
 import { checkEmailAddress } from "@/lib/admissions/email-check";
+import { ageLabelFromDateOfBirth } from "@/lib/format/age";
 import {
   portalInputClass,
   portalLabelClass,
@@ -142,6 +143,72 @@ function QuestionField({
     );
   }
 
+  /**
+   * Every other multiselect — a checkbox group from the question's own options.
+   *
+   * Until v3 the only multiselect on any published form was funding sources,
+   * which has its own component above. A multiselect defined with plain
+   * `options` fell through every branch here and landed on the generic text
+   * input at the bottom of this function: a single-line box, for a question
+   * whose answer is a list. It would have looked like it worked.
+   *
+   * `required` is enforced by the submit validator rather than by the inputs.
+   * Putting `required` on each checkbox would demand all ten be ticked; putting
+   * it on none leaves the browser silent. The server already rejects an empty
+   * required answer, so the honest thing is to let it.
+   */
+  if (question.type === "multiselect") {
+    const options = resolveStaticOptions(question);
+    const selected = new Set(
+      Array.isArray(value) ? (value as unknown[]).map((entry) => String(entry)) : []
+    );
+
+    return (
+      <div className="sm:col-span-2">
+        <fieldset>
+          <legend className={portalLabelClass}>
+            {question.label}
+            {question.required ? " *" : ""}
+          </legend>
+          {question.helpText ? (
+            <p className="mt-1 text-sm text-slate-500">{question.helpText}</p>
+          ) : null}
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {options.map((option) => {
+              const optionId = `${id}-${option.value}`;
+              const checked = selected.has(option.value);
+              return (
+                <label
+                  key={option.value}
+                  htmlFor={optionId}
+                  className="flex items-center gap-2 text-sm text-slate-700"
+                >
+                  <input
+                    id={optionId}
+                    // The form submits `new FormData(form)`, so an input
+                    // without a name is invisible to it. Repeated keys are
+                    // collected into an array by formDataToInterestValues.
+                    name={question.key}
+                    value={option.value}
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      const next = new Set(selected);
+                      if (e.target.checked) next.add(option.value);
+                      else next.delete(option.value);
+                      onChange(question.key, [...next]);
+                    }}
+                  />
+                  {option.label}
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+      </div>
+    );
+  }
+
   if (question.type === "rich_text") {
     return (
       <div className="sm:col-span-2">
@@ -234,6 +301,20 @@ function QuestionField({
       ? checkEmailAddress(text)
       : null;
 
+  /**
+   * Age, shown back to the parent as they type the birthdate.
+   *
+   * It is not a field and it is not submitted. Asking for both a birthdate and
+   * an age invites them to disagree, and the age is the one that goes stale.
+   * Showing the derived value is also the cheapest possible check on a typo —
+   * a parent who meant 2011 and typed 2001 sees "24 years old" under a
+   * kindergarten application and fixes it themselves.
+   */
+  const ageHint =
+    question.type === "date" && typeof text === "string" && text.trim() !== ""
+      ? ageLabelFromDateOfBirth(text)
+      : null;
+
   return (
     <div>
       {label}
@@ -246,8 +327,19 @@ function QuestionField({
         value={text}
         onChange={(e) => onChange(question.key, e.target.value)}
         required={question.required}
-        aria-describedby={emailHint && emailHint.kind !== "ok" ? `${id}-hint` : undefined}
+        aria-describedby={
+          emailHint && emailHint.kind !== "ok"
+            ? `${id}-hint`
+            : ageHint
+              ? `${id}-age`
+              : undefined
+        }
       />
+      {ageHint ? (
+        <p id={`${id}-age`} className="mt-1 text-sm text-slate-600">
+          {ageHint}
+        </p>
+      ) : null}
       {emailHint && emailHint.kind === "suggest" ? (
         <p id={`${id}-hint`} className="mt-1 text-sm text-amber-800">
           Did you mean{" "}

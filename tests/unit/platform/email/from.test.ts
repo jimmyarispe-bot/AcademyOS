@@ -13,9 +13,12 @@ afterEach(() => {
 });
 
 describe("resolveEmailFrom", () => {
-  it("defaults to noreply@theacademyway.org", () => {
+  it("defaults to noreply@thejag.org", () => {
+    // The last-resort sender is the platform's own domain, not a tenant's —
+    // changed in 7a4e8ea6. Pinned to the literal so a silent change to the
+    // constant cannot pass unnoticed.
     expect(resolveEmailFrom()).toBe(DEFAULT_EMAIL_FROM);
-    expect(DEFAULT_EMAIL_FROM).toBe("noreply@theacademyway.org");
+    expect(DEFAULT_EMAIL_FROM).toBe("noreply@thejag.org");
   });
 
   it("prefers EMAIL_FROM over RESEND_FROM_EMAIL", () => {
@@ -38,7 +41,8 @@ describe("resolveEmailFrom", () => {
 });
 
 describe("resolveEmailFromName", () => {
-  it("defaults to The Academy Way", () => {
+  it("defaults to The JAG", () => {
     expect(resolveEmailFromName()).toBe(DEFAULT_EMAIL_FROM_NAME);
+    expect(DEFAULT_EMAIL_FROM_NAME).toBe("The JAG");
   });
 });

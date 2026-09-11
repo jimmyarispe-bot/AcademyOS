@@ -62,6 +62,42 @@ interface AdmissionsPageContentProps {
   searchParams: Promise<{ view?: string; work?: string; drill?: string }>;
 }
 
+/**
+ * Every admissions destination, on every admissions screen.
+ *
+ * ADMISSIONS_TABS and SUB_NAV used to render only inside AdmissionsLegacyView.
+ * The default page — the one the sidebar opens, the one everybody actually
+ * lands on — showed the work queue and nothing else, so the Lead List, the
+ * Pipeline Board, State Funding, Funding Programs and Reconciliation were
+ * reachable only by typing `?view=` or a sub-route by hand. A lead list you
+ * cannot click to is not a lead list.
+ *
+ * Rendering the same component on both screens is the point: a destination
+ * added to either array now appears everywhere, and the two screens cannot
+ * drift apart again.
+ *
+ * `activeView` is "" on the work queue, which matches no tab, so nothing is
+ * highlighted — correct, because the work queue is not one of these views.
+ */
+function AdmissionsNavigation({ activeView }: { activeView: string }) {
+  return (
+    <div className="space-y-2">
+      <ViewTabs tabs={[...ADMISSIONS_TABS]} activeView={activeView} />
+      <nav className="flex flex-wrap gap-2">
+        {SUB_NAV.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+          >
+            {item.label}
+          </Link>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
 async function AdmissionsLegacyView({
   view,
   drill,
@@ -87,14 +123,7 @@ async function AdmissionsLegacyView({
           </Link>
         }
       />
-      <nav className="flex flex-wrap gap-2">
-        {SUB_NAV.map((item) => (
-          <Link key={item.href} href={item.href} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">
-            {item.label}
-          </Link>
-        ))}
-      </nav>
-      <ViewTabs tabs={[...ADMISSIONS_TABS]} activeView={view} />
+      <AdmissionsNavigation activeView={view} />
       {view === "executive" && execMetrics ? (
         <ExecutiveAdmissionsDashboard metrics={execMetrics} drillDown={drillDown} drillFilter={drill} />
       ) : view === "reporting" ? (
@@ -222,6 +251,9 @@ export async function AdmissionsPageContent({ searchParams }: AdmissionsPageCont
       }
     >
       {orgContext && <JagOrganizationContextBar org={orgContext} />}
+      {/* The lead list, the pipeline board and every admissions sub-route, on
+          the screen the sidebar actually opens. See AdmissionsNavigation. */}
+      <AdmissionsNavigation activeView="" />
       {/* The work panel shows what is in front of you today. It does not show
           the funnel, the conversion rates, or the families who have been
           waiting since February - those live one route away and nothing here

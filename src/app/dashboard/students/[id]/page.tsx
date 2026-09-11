@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { PersonDocumentsPanel } from "@/components/people/PersonDocumentsPanel";
 
 import "@/lib/platform/profile";
 
@@ -61,7 +62,8 @@ export default async function StudentDetailPage({ params, searchParams }: Studen
   const canManageLifecycle = canManageStudentLifecycle(identity);
 
   return (
-    <StudentProfileWorkspace
+    <div className="space-y-6">
+      <StudentProfileWorkspace
       envelope={envelope}
       navigation={profile.navigation}
       student={student}
@@ -72,6 +74,10 @@ export default async function StudentDetailPage({ params, searchParams }: Studen
       entityTags={contextData.entityTags}
       sectionContributions={sectionContributions}
       canManageLifecycle={canManageLifecycle}
-    />
+      />
+      {/* Transcripts, IEPs, medical forms, signed contracts. Gated on
+          students.view / students.edit inside the panel's own actions. */}
+      <PersonDocumentsPanel subjectType="student" subjectId={student.id} />
+    </div>
   );
 }

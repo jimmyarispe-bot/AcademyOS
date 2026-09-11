@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { PersonDocumentsPanel } from "@/components/people/PersonDocumentsPanel";
 
 import "@/lib/platform/profile";
 
@@ -63,7 +64,8 @@ export default async function EmployeeDetailPage({
   );
 
   return (
-    <EmployeeProfileWorkspace
+    <div className="space-y-6">
+      <EmployeeProfileWorkspace
       envelope={envelope}
       navigation={profile.navigation}
       activeSection={activeSection}
@@ -71,6 +73,10 @@ export default async function EmployeeDetailPage({
       pinnedNotes={contextData.notesForContext}
       entityTags={contextData.entityTags}
       sectionContributions={sectionContributions}
-    />
+      />
+      {/* Personnel file. Gated on hr.view / hr.manage inside the panel's own
+          actions, so a teacher who can reach this route still cannot read it. */}
+      <PersonDocumentsPanel subjectType="employee" subjectId={employeeId} />
+    </div>
   );
 }

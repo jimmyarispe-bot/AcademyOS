@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "brand": {
+    "writtenInstructor": "Mr. Jag",
+    "writtenProduct": "The Jag"
+  },
+  "videos": [
+    {
+      "id": "jag-001",
+      "title": "Welcome to The Jag",
+      "enabled": true,
+      "script": "Hello — I'm Mr. Jag. Welcome to The Jag. The Jag is your organizational intelligence command center. It brings together what you're allowed to see — your identity, role, and permissions — with evidence and your organization's current state. It is not a second portal, and it is not a learning management system. Use Learning Center to get oriented. From here, you'll learn the Command Center surfaces — Overview, Conversation, Inbox, Decisions, Listening, Briefings, Scenarios, Memory, and Strategy — when they're part of your experience. You can return anytime from Learn in the Command Center navigation. Platform onboarding is separate — Learning Center is where you learn how to use The Jag. Now let's try it together. I'll show you the Command Center shell, then Learn — so you know where to continue. Open the interactive guide when you're ready, and complete Welcome to The Jag."
+    },
+    {
+      "id": "jag-002",
+      "title": "Navigating Your Jag Command Center",
+      "enabled": false,
+      "script": "Hello — I'm Mr. Jag. Let's navigate The Jag Command Center with confidence. On the left, the sidebar is how you move between Overview, Learn, and the intelligence surfaces enabled for your workspace. What you see is capability-gated — destinations appear when your organization has the capability enabled, and you will not see surfaces you are not authorized to use. Settings is where you manage the available brand and account settings. Learn is for product orientation and tutorials — not organization provisioning. Platform Onboarding stays separate. Open the sidebar, find Learn when you want to continue tutorials, and move into the surfaces your workspace allows."
+    },
+    {
+      "id": "jag-003",
+      "title": "Using Executive Conversation",
+      "enabled": false,
+      "script": "Hello — I'm Mr. Jag. This tutorial is about Executive Conversation. Open Conversation from the sidebar for evidence-backed executive questions about your organization. It is not a general chatbot, and it is not the AI Coach. When signals are available, answers cite them. When supporting signals aren't available, The Jag tells you rather than filling in the gaps. For “how do I use The Jag?” and navigation help, open Learn and use the AI Coach. Keep Conversation for organizational intelligence questions. Open Conversation when you're ready, and ask an evidence-backed question."
+    },
+    {
+      "id": "jag-004",
+      "title": "Understanding Your Inbox",
+      "enabled": false,
+      "script": "Hello — I'm Mr. Jag. In The Jag, your Inbox surfaces watcher-driven executive attention. Open Inbox from the sidebar — it lists watcher alerts and attention items for your workspace. Use those items as entry points into Decisions, Listening, or other intelligence surfaces. Inbox does not invent alerts without watchers. Open Inbox and review what is calling for your attention."
+    },
+    {
+      "id": "jag-005",
+      "title": "Decision Center",
+      "enabled": false,
+      "script": "Hello — I'm Mr. Jag. In The Jag, Decision Center holds decision records and follow-through for your organization. Open Decisions from the sidebar to see decision records for the active organization. Open a decision to review status, related evidence, and next actions as they appear in production. An empty list means there are no fabricated decisions — empty states stay honest. Open Decision Center and review a decision when one is available."
+    },
+    {
+      "id": "jag-006",
+      "title": "Listening & Listening Intelligence",
+      "enabled": false,
+      "script": "Hello — I'm Mr. Jag. In The Jag, Listening captures stakeholder signal, and Listening Intelligence analyzes it. Open Listening to manage campaigns, instruments, and versions for structured listening. Then open Listening Intelligence to review analysis runs and signals when data exists — it does not invent segment insights. Start in Listening, then check Listening Intelligence when you're ready to see analysis."
+    },
+    {
+      "id": "jag-007",
+      "title": "Executive Briefings",
+      "enabled": false,
+      "script": "Hello — I'm Mr. Jag. In The Jag, Briefings assemble executive-ready summaries from organizational signals. Open Briefings from the sidebar to see briefing artifacts for your workspace. Open a briefing to read the structured summary — content reflects available evidence, and empty workspaces show empty states. Open Briefings and review a briefing when one is available."
+    },
+    {
+      "id": "jag-008",
+      "title": "Scenario Planner",
+      "enabled": false,
+      "script": "Hello — I'm Mr. Jag. In The Jag, Scenario Planner lets you explore hypothetical organizational scenarios without inventing facts about current state. Open Scenarios to see available scenario templates and runs. Treat scenarios as planning aids — they do not replace evidence-backed Conversation answers about how things stand today. Open Scenario Planner and explore a template when you're ready."
+    },
+    {
+      "id": "jag-009",
+      "title": "Memory",
+      "enabled": false,
+      "script": "Hello — I'm Mr. Jag. In The Jag, Memory retains organizational context for intelligence. Open Memory to review retained organizational memory entries available to your workspace. Other intelligence surfaces may reference that memory. If Memory is empty, nothing has been retained yet — that is not an error. Open Memory and see what context is available."
+    },
+    {
+      "id": "jag-010",
+      "title": "Strategy",
+      "enabled": false,
+      "script": "Hello — I'm Mr. Jag. In The Jag, Strategy holds mission, pillars, and related strategic intelligence for the active organization. Open Strategy to review that structure. Strategy reflects your organization's configured intent. Keep it aligned with the evidence, and use Decisions and Briefings to support follow-through. Open Strategy and review your mission and pillars."
+    }
+  ]
+}

@@ -67,7 +67,7 @@ export function buildTheme(brand: OrganizationBrand): BrandTheme {
   const accent = brand.accent_color || "#0D9488";
 
   // Shell surfaces stay dark; lift primary toward black for bg, lighten for panel.
-  const jagBg = mixToward(primary, { r: 0, g: 0, b: 0 }, 0.35);
+  const jagBg = "#000000";
   const jagPanel = mixToward(secondary, { r: 255, g: 255, b: 255 }, 0.06);
   const jagBorder = mixToward(secondary, { r: 255, g: 255, b: 255 }, 0.14);
   const jagText = "#F8FAFC";
