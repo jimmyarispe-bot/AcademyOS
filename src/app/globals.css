@@ -114,3 +114,43 @@ textarea:focus:not(:focus-visible) {
 .btn-academy:hover {
   background-color: var(--color-academy-dark);
 }
+
+/**
+ * The whole page, while something is happening.
+ *
+ * One class for both halves of the same question: a link being followed and a
+ * button being pressed. `GlobalProgressProvider` puts it on whenever the
+ * progress bar is running, so every action that reports progress — and every
+ * navigation — says so the same way, without each call site remembering to.
+ *
+ * THE CURSOR. Setting `cursor` on <body> alone does nothing useful: the cursor
+ * is decided by the element under the pointer, and every link and button
+ * carries `cursor: pointer`, which beats anything inherited. The one person
+ * guaranteed not to see a waiting cursor was the person hovering the thing they
+ * just clicked. So this covers every descendant and forces it. `!important` is
+ * load-bearing rather than lazy — it has to beat utility classes on arbitrary
+ * elements, and it lives for exactly one action.
+ */
+body.jag-busy,
+body.jag-busy * {
+  cursor: progress !important;
+}
+
+/**
+ * The bar's indeterminate state: a band that sweeps, rather than a third of a
+ * bar that fades in and out on the spot. Movement is what reads as "working"
+ * from the corner of the eye; a pulse reads as decoration.
+ */
+@keyframes jag-progress-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+.jag-progress-indeterminate {
+  width: 25%;
+  animation: jag-progress-sweep 1.1s ease-in-out infinite;
+}

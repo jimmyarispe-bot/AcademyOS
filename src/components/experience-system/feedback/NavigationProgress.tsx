@@ -62,7 +62,6 @@ export function NavigationProgress() {
     if (running.current) {
       running.current = false;
       progress.hide();
-      document.body.style.removeProperty("cursor");
     }
     // `key` is the whole point of this effect: it re-runs when the URL settles.
   }, [key, progress]);
@@ -103,16 +102,15 @@ export function NavigationProgress() {
       }
 
       running.current = true;
+      // Showing the bar is the whole of it: the provider puts the page into its
+      // busy state — bar and waiting cursor — for anything that reports here,
+      // so a followed link and a pressed button look the same.
       progress.show("Loading…");
-      // The literal hourglass. The bar is a thin line at the top of a tall
-      // page; the cursor is where the person is already looking.
-      document.body.style.setProperty("cursor", "progress");
 
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => {
         running.current = false;
         progress.hide();
-        document.body.style.removeProperty("cursor");
       }, NAVIGATION_TIMEOUT_MS);
     }
 
@@ -121,7 +119,6 @@ export function NavigationProgress() {
     return () => {
       document.removeEventListener("click", onClick, true);
       if (timer.current) clearTimeout(timer.current);
-      document.body.style.removeProperty("cursor");
     };
   }, [progress]);
 

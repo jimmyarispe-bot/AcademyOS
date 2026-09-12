@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -53,6 +54,26 @@ export function GlobalProgressProvider({ children }: { children: ReactNode }) {
     setState({ active: false });
   }, []);
 
+  /**
+   * The page says it is busy, once, for everybody.
+   *
+   * Every action already reports through this provider, so this is the single
+   * place that can make a press look like a press without each call site
+   * remembering to. The class drives the waiting cursor across the whole
+   * document (see globals.css) — a spinner inside a button is easy to miss on a
+   * tall page, and the cursor is where the person is already looking.
+   *
+   * Cleared on unmount as well as on hide, because a class left on <body> by a
+   * component that went away is a page that never stops looking busy.
+   */
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const { body } = document;
+    if (state.active) body.classList.add("jag-busy");
+    else body.classList.remove("jag-busy");
+    return () => body.classList.remove("jag-busy");
+  }, [state.active]);
+
   // P006: keep API stable — do not put `state` in this memo.
   const api = useMemo(() => ({ show, setProgress, hide }), [show, setProgress, hide]);
 
@@ -96,11 +117,13 @@ function GlobalProgressBar() {
       aria-busy="true"
       aria-label={state.label ?? "Working"}
     >
-      <div className="h-0.5 w-full bg-brand-100/80">
+      {/* Four pixels, not two. This is the one signal shared by every action
+          in the product, and at 2px on a bright header it read as a border. */}
+      <div className="h-1 w-full overflow-hidden bg-brand-100">
         <div
           className={cn(
-            "h-full bg-brand-600 transition-all duration-300",
-            !known && "animate-pulse w-1/3"
+            "h-full bg-brand-600",
+            known ? "transition-all duration-300" : "jag-progress-indeterminate"
           )}
           style={known ? { width: `${pct}%` } : undefined}
         />

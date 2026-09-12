@@ -1,27 +1,23 @@
-Platform: clicking a link shows the same progress bar as pressing a button
+Platform: a press looks like a press, everywhere at once
 
-Pressing Save has driven the bar at the top of the page since the action system
-was built. Clicking a link drove nothing — and a link is the more common thing
-to press. The current page stays fully rendered and interactive while the next
-one is fetched, so a slow section looks exactly like a click that missed, and
-the reasonable response to a click that missed is to click again.
+Three signals now, driven from one place.
 
-One listener at the document rather than per-link. The App Router has no
-router-events hook; useLinkStatus is the documented tool and reports on one
-Link from inside that link's own subtree, so using it would mean editing every
-link in the product and remembering to do so for every link anybody adds.
-Listening once covers every link that exists and every link that will exist,
-including plain anchors.
+The bar goes from two pixels to four and sweeps instead of pulsing. At 2px on a
+bright header it read as a border; movement is what reads as "working" from the
+corner of the eye.
 
-The bar stops when the pathname OR the query string changes. The query string
-matters as much as the path — a case page moves between sections with
-?section=, so watching the path alone would leave the bar running forever on
-the screens people use most. A ten-second timeout covers clicks that
-legitimately go nowhere, because a bar that never stops is worse than no bar.
+The whole page takes a waiting cursor. Setting `cursor` on <body> alone did
+nothing useful — the cursor is decided by the element under the pointer, and
+every link and button carries `cursor: pointer`, so the one person guaranteed
+not to see it was the person hovering the thing they just clicked. A class plus
+a rule covering every descendant fixes that.
 
-The cursor goes to `progress` at the same time. The bar is a thin line at the
-top of a tall page; the cursor is where the person is already looking.
+And both are driven by GlobalProgressProvider rather than by each call site, so
+every action that already reports progress gets them for free, as does every
+navigation. Nothing to remember at the call site, and nothing to add to the
+next button somebody writes — provided it uses the action system.
 
-Also in this ship: the profile section tabs wrap onto a second row instead of
-scrolling, and the threshold for hiding sections behind "More" goes from twelve
-to twenty-four.
+Known gap: about seventy client components run a mutation from a hand-rolled
+button without going through useActionFeedback. Those still show nothing but
+their own local state. They need finding and converting; this ship does not do
+that.
