@@ -1,17 +1,25 @@
-Admissions: Georgia's scholarship questions stay on Georgia's form
+Admissions: the high school's five questions go to the student
 
-The GA GOAL eligibility section was gated on the GOAL tick alone, with no
-mention of the campus. Ticking it and then changing the school selector left
-the tick in browser state, so the section stayed open — required uploads and
-all — at the bottom of the high school and virtual forms.
+Version 14 took the "Student Section" out of the inquiry form, because a parent
+typing answers on behalf of a teenager who is not in the room is worth less than
+asking nobody. This is the other half: the student gets the questions in an
+email of their own, answers them in their own words, and the answers land on the
+admissions case where staff read everything else.
 
-Two guards, because neither alone is enough for the next answer-gated section
-somebody adds:
+The form already promises exactly this — "Your student will be sent a few
+questions for him/her to complete once you submit this form." Until now that was
+a promise nothing kept.
 
-  v13 gates that section on the Georgia campus as well as the tick.
-  The renderer forgets answers belonging to sections that close when the
-  school changes, which is the general shape of the same bug.
+No account. A fourteen-year-old will not create one, and requiring it would cost
+more answers than it protects. The link follows the token design in migration
+230: 256 bits minted in the application, only the SHA-256 digest stored, both
+the resolve and the submit behind SECURITY DEFINER functions that fail closed
+and hand back the student's first name and the school's name and nothing else.
 
-Nothing was ever saved to the wrong campus — the server drops hidden answers
-before validating. The damage was to the parent, shown a wall of irrelevant
-required questions they could not fill in and could not submit past.
+The database keeps its own copy of the five accepted keys and caps each answer,
+because this runs for anyone holding a link. A test reads the migration and
+checks the two lists still agree.
+
+Also in this ship: v14 itself, which removes that section, relabels the
+student's email address to say what it is for, and asks the high school the
+scholarship question Virtual already asked.

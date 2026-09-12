@@ -9,6 +9,7 @@ import { ADMISSIONS_CASE_PROFILE_SECTIONS } from "@/lib/admissions/profile/secti
 // references. Client-side code splitting is still handled by Next.
 import { OverviewSection } from "@/components/admissions/case/sections/OverviewSection";
 import { ProspectSection } from "@/components/admissions/case/sections/ProspectSection";
+import { StudentQuestionnaireSection } from "@/components/admissions/case/sections/StudentQuestionnaireSection";
 import { PipelineSection } from "@/components/admissions/case/sections/PipelineSection";
 import { ApplicationsSection } from "@/components/admissions/case/sections/ApplicationsSection";
 import { DocumentsSection } from "@/components/admissions/case/sections/DocumentsSection";
@@ -27,6 +28,7 @@ const SECTION_VERSION = "1.0.0";
 const SECTION_COMPONENTS: Record<string, ProfileSectionComponent> = {
   overview: OverviewSection,
   prospect: ProspectSection,
+  student_questionnaire: StudentQuestionnaireSection,
   pipeline: PipelineSection,
   applications: ApplicationsSection,
   documents: DocumentsSection,

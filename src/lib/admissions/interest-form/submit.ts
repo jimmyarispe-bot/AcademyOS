@@ -26,6 +26,7 @@ import {
 } from "@/lib/platform/api-rate-limit";
 import { createAuthClient } from "@/lib/supabase/server-auth";
 import { setAutomationStartedAt } from "@/lib/admissions/automation-gate";
+import { sendStudentQuestionnaire } from "@/lib/admissions/student-questionnaire/send";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 
 function asString(value: unknown): string {
@@ -224,6 +225,53 @@ async function attachInquiryDocuments(input: {
 }
 
 /**
+ * Email the student their own five questions, when the form collected an
+ * address for them.
+ *
+ * Keyed off the answer, not off the campus. `hs_student_email` is asked only in
+ * the high school's section, so its presence already means "this family applied
+ * to the high school" — and if another campus ever starts asking a student for
+ * their address, it will mean the same thing there without anybody remembering
+ * to add a school name to a list here.
+ *
+ * The form promises this email in so many words: "Your student will be sent a
+ * few questions for him/her to complete once you submit this form." A failure
+ * is therefore logged loudly, because it is a promise the school has already
+ * made to a family by the time this runs.
+ *
+ * It is not, however, allowed to fail the submission. The lead is saved, the
+ * family have been told their inquiry was received, and that is true. A
+ * questionnaire that did not send is for staff to resend.
+ */
+async function sendStudentQuestionnaireIfAsked(input: {
+  leadId: string;
+  schools: PublishedInterestForm["schools"];
+  values: InterestFormValues;
+}): Promise<void> {
+  const studentEmail = asString(input.values.hs_student_email);
+  if (!studentEmail) return;
+
+  const schoolId = asString(input.values.school_id);
+  const schoolName =
+    input.schools.find((school) => school.id === schoolId)?.name ?? "The Academy";
+
+  const admin = createServiceRoleClient();
+  const result = await sendStudentQuestionnaire(admin, {
+    leadId: input.leadId,
+    studentEmail,
+    studentFirstName: asString(input.values.preferred_name) || asString(input.values.first_name),
+    schoolName,
+  });
+
+  if (!result.ok) {
+    console.error("[interest-form] student questionnaire was not sent", {
+      leadId: input.leadId,
+      error: result.error,
+    });
+  }
+}
+
+/**
  * Submit Express Interest against the server-resolved published form.
  * Client-supplied organization_id / form ownership is ignored.
  */
@@ -334,6 +382,12 @@ export async function submitPublishedInterestForm(
   await attachInquiryDocuments({
     leadId,
     definition: published.definition,
+    values: visible,
+  });
+
+  await sendStudentQuestionnaireIfAsked({
+    leadId,
+    schools: published.schools,
     values: visible,
   });
 

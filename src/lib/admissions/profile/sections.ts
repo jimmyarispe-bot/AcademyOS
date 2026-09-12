@@ -231,6 +231,41 @@ export const ADMISSIONS_CASE_PROFILE_SECTIONS: ProfileSectionDefinition[] = [
     },
   }),
   section({
+    key: "student_questionnaire",
+    label: "Student Questionnaire",
+    group: "relationships",
+    sortOrder: 15,
+    moduleKey: "admissions",
+    permissions: ["admissions.view", "admissions.manage", "admissions.accept"],
+    status: "live",
+    /**
+     * The high school's five questions, answered by the student from their own
+     * emailed link rather than over their parent's shoulder. Rows exist only
+     * for leads that were asked, so every other campus renders nothing.
+     *
+     * `as never` on the table name: migration 340 is hand-run, so the generated
+     * database types do not know this table. Naming only this query keeps every
+     * other query in the file type-checked.
+     */
+    loadData: async (supabase, envelope) => {
+      const env = caseEnvelope(envelope);
+      if (!env) return null;
+      const { data, error } = await supabase
+        .from("admissions_student_questionnaires" as never)
+        .select(
+          "id, student_email, status, answers, sent_at, opened_at, completed_at, expires_at"
+        )
+        .eq("lead_id", env.leadId)
+        .order("sent_at", { ascending: false });
+
+      if (error) {
+        console.error("[admissions-case] student questionnaires", error.message);
+        return null;
+      }
+      return { questionnaires: data ?? [] };
+    },
+  }),
+  section({
     key: "scholarships",
     label: "Scholarships & Funding",
     group: "financial",
