@@ -1,31 +1,47 @@
-Admissions: money looks like money
+Parents: invitations, and the ninth GA GOAL eligibility route
 
-A new `currency` field type. It renders as a number field with a dollar sign
-inside it, on the left, where a parent copying a figure off an award letter can
-see what the box wants while they are typing into it. A label reading
-"amount ($)" is read once and then forgotten during the part that matters.
+PARENT INVITATIONS. Nothing here is new machinery. createManagedUser already
+creates the auth user, delivers the invitation through Resend rather than
+Supabase SMTP, and gates the account behind invite_activation until the person
+sets a password at /login/activate. A PARENT role already exists with its own
+permission group. None of it had ever been pointed at a guardian.
 
-The stored value is unchanged — a plain number. The symbol is decoration and
-nobody has to type or delete it.
+The one genuinely missing step is one line: setting guardians.user_id so the
+account a parent activates connects to the family record the portal reads.
+Without it a parent signs in successfully and sees nothing — the worst of the
+three possible outcomes, because it looks like it worked. That write checks its
+error, since an invitation that landed and a link that did not is the one
+combination producing a confused family and no trace of why.
 
-THE VALIDATOR NOW READS WHAT PARENTS ACTUALLY TYPE. Number("$10,463.00") is NaN.
-A parent copying that figure off the letter in front of them is reading
-correctly, and telling them it is not a valid number is how a form loses a
-family who did nothing wrong. Dollar signs, commas and spaces are stripped
-before parsing. Five tests, including the one that keeps it honest: "about ten
-thousand" is still rejected.
+Not inviteManagedUsers: it invents a name from the email local part, so
+katieallen315@yahoo.com becomes "Katieallen315 User". For staff typing addresses
+into a box that is a fair guess; for guardians we hold real names.
 
-fl_scholarship_amount and ga_special_needs_amount become currency in interest
-form v9. "GTID" becomes "GA Special Needs Scholarship GTID" — on its own the
-acronym sat under a heading and left a parent to infer which of their
-scholarships it belonged to.
+THIS SENDS REAL EMAIL TO REAL FAMILIES, so the safeguards are the feature:
+nothing is selected by default, the caller must type SEND, there is no
+invite-everyone-everywhere path, one campus at a time, and a batch cap of 50 so
+a mistake reaches fifty families rather than all of them. Eligibility is
+re-checked at send time, not only in the preview — a list is minutes old by the
+time somebody clicks, and inviting a parent twice sends a second set of
+credentials for an account they already activated.
 
-The key stays ga_gtid. It moved in v7 an hour ago because nothing had been
-answered under it, and that is still true — but a key should stop moving once it
-is right.
+Skipped guardians are listed with the reason rather than filtered away. A list
+that quietly omits half a campus is a list nobody can check.
 
-SHIP BEFORE RUNNING THE MIGRATION. An unknown field type falls through to the
-generic text input: it works, and it shows no symbol.
+CAUGHT BY THE REPOSITORY'S OWN CHECK: the client list imported its batch
+constant from the module that imports the service-role client, which would have
+dragged server-only code into the browser bundle. The constant now lives alone.
+That check exists for exactly this and it earned its keep.
+
+GA GOAL, ninth route: a scholarship already held from another Student
+Scholarship Organization at a different private school. A child transferring
+from another private school cannot satisfy "six weeks in a Georgia public school
+immediately prior", so without this every transferring family reads as
+ineligible. It comes from GOAL's own Submit a New Student guidance and NOT from
+the statute text this form otherwise quotes verbatim; Georgia's SSO chapter
+makes each organization solely responsible for verifying eligibility, so GOAL is
+the authority on its own list. The wording describes the family's situation
+rather than asserting a legal conclusion.
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_014B9rkuWAq2petze3CoyFp6
