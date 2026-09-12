@@ -1,24 +1,24 @@
-Platform: every email address and phone number is clickable
+Access: assigning schools sets them, and a school can be taken away
 
-Two places in the whole product made contact details tappable — the People
-Directory and the admissions waiting list. Everywhere else they were plain
-text, which on a phone means reading a number off the screen and typing it into
-the dialler. Staff read these on a phone as often as at a desk.
+Nina Gaddy was assigned to The Academy GA and came out with GA and FL.
 
-EmailLink and PhoneLink, used across the admissions case, the lead list, the
-executive dashboard, the student profile's guardians and emergency contacts,
-families, HR, the staff directory, the parent invite list and the admin user
-tables.
+Three faults, compounding:
 
-Neither reformats what is shown. The number a family gave is how that family
-recognises their own number, so the display stays exactly as stored and only
-the dial target is normalised — ten digits get +1, an international number
-keeps its own prefix, an extension is dropped rather than gambled on because
-some diallers silently fail on `;ext=`. A value that is not an address or a
-number renders as plain text rather than disappearing: "ask mum" is still the
-only contact detail on file.
+The dialog's checkboxes rendered unticked whatever the person already had, so
+it showed "no schools" for somebody who had one. "Assign School" then upserted
+each ticked box and removed nothing — ticking GA meant "also give them GA", not
+"their schools are GA". And there was no removal path anywhere in the identity
+layer: the only deletes wipe every assignment as part of deleting the user. So
+school access could be granted and never revoked, from any screen.
 
-Also fixes ProfileItem title-casing anything it was given, which is why the
-questionnaire panel read "Jimmy.Arispe@Gmail.Com" — CSS capitalising an address
-that is not capitalised anywhere else and that a reader might retype. It now
-applies only to plain strings, which is what it was written for.
+On an access-control surface, a screen that shows one thing and does another is
+the whole problem, not a rough edge.
+
+Now: the boxes show what the person holds, the ticked set is the answer — added
+if missing, removed if unticked — and removal exists as its own action against
+both tables that record access, logged as a security event. Granting access is
+routine; removing it is what somebody asks about six months later.
+
+An empty selection means no school access, which an administrator needs to be
+able to do. It reads as a decision rather than an accident because the dialog
+now shows what they had before they submit.

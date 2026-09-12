@@ -69,3 +69,20 @@ describe("email linking", () => {
     expect(mailtoHref("no email on file")).toBeNull();
   });
 });
+
+/**
+ * The staff alert's dial link uses this, via the `parent_phone_dial` merge
+ * field. A template cannot normalise anything, so whatever this returns is
+ * exactly what ends up inside `tel:` in somebody's inbox.
+ */
+describe("the dialable form used by email templates", () => {
+  it("strips the scheme so a template can write tel: itself", () => {
+    const dial = (telHref("(407) 555-0123") ?? "").replace(/^tel:/, "");
+    expect(dial).toBe("+14075550123");
+  });
+
+  it("gives an empty string rather than a broken link when there is no number", () => {
+    const dial = (telHref(null) ?? "").replace(/^tel:/, "");
+    expect(dial).toBe("");
+  });
+});

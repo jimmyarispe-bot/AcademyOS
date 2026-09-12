@@ -81,6 +81,17 @@ export const MERGE_FIELDS = [
   "guardian_name",
   "guardian_email",
   "guardian_phone",
+  /**
+   * The parent's phone number, normalised for a `tel:` link.
+   *
+   * `parent_phone` is what the family typed — "(407) 555-0123" — and that is
+   * what a reader should see. A `tel:` href wants the same number without the
+   * decoration, because a mail client that cannot parse it silently renders
+   * dead text, and a member of staff on a phone then retypes it by hand.
+   *
+   * Use it only inside the href: <a href="tel:{{parent_phone_dial}}">{{parent_phone}}</a>
+   */
+  "parent_phone_dial",
   "school_name",
   "program_name",
   "campus_name",

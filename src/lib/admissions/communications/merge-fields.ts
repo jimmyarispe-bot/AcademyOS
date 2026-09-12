@@ -2,6 +2,7 @@ import { programLabel } from "@/lib/constants/programs";
 import { fundingSourceLabels } from "@/lib/constants/programs";
 import type { MergeField } from "@/lib/admissions/communications/types";
 import { resolvePublicAppOrigin } from "@/lib/platform/branding";
+import { telHref } from "@/lib/format/contact";
 
 export interface MergeContext {
   studentFirstName?: string | null;
@@ -117,6 +118,8 @@ export function buildMergeValues(ctx: MergeContext): Record<MergeField, string> 
     guardian_name: parentName(ctx),
     guardian_email: ctx.guardianEmail ?? "",
     guardian_phone: ctx.guardianPhone ?? "",
+    // Same number, stripped to what a dialler will accept. See types.ts.
+    parent_phone_dial: (telHref(ctx.guardianPhone) ?? "").replace(/^tel:/, ""),
     school_name: ctx.schoolName ?? "The Academy",
     program_name: programLabel(ctx.program),
     campus_name: ctx.campusName ?? "Main Campus",

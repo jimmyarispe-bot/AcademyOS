@@ -864,7 +864,7 @@ export function UsersAccessView({
       )}
 
       {modal === "assign-school" && (
-        <ModalShell title="Assign School" onClose={() => setModal(null)}>
+        <ModalShell title={actionUserId ? "Schools" : "Assign School"} onClose={() => setModal(null)}>
           <form
             className="space-y-3"
             onSubmit={(e) => {
@@ -880,16 +880,33 @@ export function UsersAccessView({
             }}
           >
             {actionUserId ? (
+              /* The boxes show what this person actually has.
+                 They used to render unticked whatever the person's access was,
+                 and the action only ever added — so ticking one school read as
+                 "set their access to this school" and meant "also give them
+                 this school". Somebody assigned to the wrong campus kept it,
+                 with no way to take it back from any screen in the product. */
               <fieldset>
                 <legend className="mb-1 text-sm">Schools</legend>
                 <div className="max-h-48 space-y-1 overflow-auto rounded border p-2">
-                  {schools.map((s) => (
-                    <label key={s.id} className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" name="school_ids" value={s.id} />
-                      {s.name}
-                    </label>
-                  ))}
+                  {schools.map((s) => {
+                    const current = users.find((u) => u.id === actionUserId);
+                    return (
+                      <label key={s.id} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          name="school_ids"
+                          value={s.id}
+                          defaultChecked={current?.schoolIds?.includes(s.id) ?? false}
+                        />
+                        {s.name}
+                      </label>
+                    );
+                  })}
                 </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  This sets their schools. Unticking one removes that school&rsquo;s access.
+                </p>
               </fieldset>
             ) : (
               <label className="block text-sm">
@@ -908,7 +925,7 @@ export function UsersAccessView({
                 Cancel
               </button>
               <button type="submit" className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">
-                Assign School
+                {actionUserId ? "Save schools" : "Assign School"}
               </button>
             </div>
           </form>

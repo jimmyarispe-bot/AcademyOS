@@ -179,6 +179,72 @@ export async function assignUserOrgScopeAction(formData: FormData) {
   return { success: true };
 }
 
+/**
+ * Take a school away from somebody.
+ *
+ * Until now this did not exist. `assignUserOrgScopeAction` upserts, and the
+ * only deletes anywhere in the identity layer wipe every assignment a user has
+ * as part of removing the user entirely. So school access could be granted and
+ * never revoked — a person given the wrong campus kept it, and the screen that
+ * appeared to set their schools only ever added to them.
+ *
+ * Two tables, because access is recorded in two: `user_org_assignments` carries
+ * the scope, `user_schools` the membership. Leaving either behind leaves the
+ * person with the school through the other one, which is the failure that looks
+ * most like success.
+ *
+ * Logged as a security event. Granting access is routine; removing it is the
+ * thing somebody asks about six months later.
+ */
+export async function removeUserOrgScopeAction(formData: FormData) {
+  const supabase = await assertPermission("users.manage");
+  const userId = formData.get("user_id") as string;
+  const schoolId = formData.get("school_id") as string;
+  if (!userId || !schoolId) return { error: "User and school required" };
+
+  const { error: scopeError } = await supabase
+    .from("user_org_assignments")
+    .delete()
+    .eq("user_id", userId)
+    .eq("school_id", schoolId);
+  if (scopeError) return { error: scopeError.message };
+
+  const { error: membershipError } = await supabase
+    .from("user_schools")
+    .delete()
+    .eq("user_id", userId)
+    .eq("school_id", schoolId);
+  if (membershipError) return { error: membershipError.message };
+
+  await logSecurityEvent(supabase, {
+    eventType: "org_assignment_change",
+    userId,
+    schoolId,
+    summary: "School access removed",
+  });
+
+  const ctx = await resolveIdentityActivityContext(supabase, schoolId);
+  await recordActivity(supabase, {
+    eventType: "identity.org_scope_removed",
+    moduleKey: "identity",
+    entityType: "user",
+    entityId: userId,
+    title: "School access removed",
+    summary: `School access removed for school ${schoolId}`,
+    organizationId: ctx.organizationId,
+    schoolId,
+    actorUserId: ctx.actorUserId,
+    relatedEntityType: "school",
+    relatedEntityId: schoolId,
+    payload: { target_user_id: userId },
+    sourceTable: "user_org_assignments",
+    sourceId: userId,
+  });
+
+  revalidatePath("/dashboard/admin/users");
+  return { success: true };
+}
+
 export async function toggleRolePermissionAction(formData: FormData) {
   const supabase = await assertPermission("roles.manage");
   const roleId = formData.get("role_id") as string;
