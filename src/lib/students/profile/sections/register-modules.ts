@@ -93,6 +93,10 @@ const SECTION_COMPONENT_LOADERS: Record<string, () => Promise<ProfileSectionComp
     import("@/components/students/profile/sections/StudentSectionViews").then(
       (module) => module.ComplianceSection
     ),
+  notes: () =>
+    import("@/components/students/profile/sections/StudentNotesSection").then(
+      (module) => module.StudentNotesSection
+    ),
   communications: () =>
     import("@/components/students/profile/sections/StudentSectionViews").then(
       (module) => module.CommunicationsSection

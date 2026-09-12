@@ -493,6 +493,43 @@ export const STUDENT_PROFILE_SECTIONS: ProfileSectionDefinition[] = [
     }),
   }),
   section({
+    key: "notes",
+    label: "Notes",
+    group: "operations",
+    sortOrder: 185,
+    moduleKey: "platform",
+    permissions: ["students.view"],
+    status: "live",
+    /**
+     * Somewhere for a member of staff to write down what they know.
+     *
+     * The student profile had twenty-five sections and no notes. Admissions
+     * has had them all along, so everything learned about a child during
+     * admissions stopped at the point they enrolled — and a teacher or school
+     * leader had nowhere to put what they learned afterwards.
+     *
+     * Platform notes rather than a second notes table: keyed on
+     * (entity_type, entity_id), so the same rows and the same panel serve a
+     * student, an employee or a family, and a note keeps its author, its
+     * category and its pin wherever it is read.
+     */
+    loadData: async (supabase, envelope) => {
+      const env = studentEnvelope(envelope);
+      if (!env) return null;
+      const { getEntityNotes } = await import("@/lib/platform/notes");
+      const notes = await getEntityNotes(supabase, "student", env.studentId, {
+        pinnedFirst: true,
+      });
+      return {
+        notes,
+        organizationId: env.organizationId,
+        schoolId: env.schoolId,
+        studentId: env.studentId,
+        familyId: env.familyId,
+      };
+    },
+  }),
+  section({
     key: "communications",
     label: "Communications",
     group: "intelligence",

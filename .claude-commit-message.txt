@@ -1,0 +1,20 @@
+Students: somewhere to write down what staff know about a child
+
+The student profile had twenty-five sections and no notes. Admissions has had
+them all along, so everything learned about a child during admissions stopped
+at the point they enrolled, and the teacher or school leader who learned
+something afterwards had nowhere to put it.
+
+Platform notes rather than a second notes table. Those rows are keyed on
+(entity_type, entity_id), so one panel serves a student today and an employee
+or a family the day somebody asks, and a note keeps its author, category and
+pin wherever it is read. Categories — academic, behavior, medical, family,
+compliance, financial — and pinning, which is what keeps "carries an EpiPen"
+above eighteen months of routine notes. Staff visibility, author and timestamp
+recorded, no edit or delete from this panel.
+
+Also a guard test. A student section is defined in one file and given a
+component in another, and the registration loop skips any section without one —
+no error, no warning, the tab simply is not there. The admissions case had the
+same shape and cost a shipped feature that rendered "Section module is not
+registered". Both profiles now fail a test rather than a user.
