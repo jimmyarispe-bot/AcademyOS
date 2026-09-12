@@ -1,24 +1,24 @@
-Access: assigning schools sets them, and a school can be taken away
+Admissions: the inquiry thank-you says why we want to talk
 
-Nina Gaddy was assigned to The Academy GA and came out with GA and FL.
+Adds to both parent-facing inquiry emails:
 
-Three faults, compounding:
+  "We would love to hear what you are looking for in a learning environment for
+   your child."
 
-The dialog's checkboxes rendered unticked whatever the person already had, so
-it showed "no schools" for somebody who had one. "Assign School" then upserted
-each ticked box and removed nothing — ticking GA meant "also give them GA", not
-"their schools are GA". And there was no removal path anywhere in the identity
-layer: the only deletes wipe every assignment as part of deleting the user. So
-school access could be granted and never revoked, from any screen.
+Two templates, two placements, because they say different things. The one with
+the booking link puts it between "The next step is a conversation" and "Please
+pick a time that suits you" — so the reason reaches the parent before the link,
+rather than after it where people stop reading. The one without a link puts it
+before "If it is easier, simply reply to this email", so an invitation to write
+back follows a reason to write back.
 
-On an access-control surface, a screen that shows one thing and does another is
-the whole problem, not a rough edge.
+Inserted with replace() rather than rewritten. These bodies were read through a
+grid that truncates, so parts of them were inferred rather than seen, and
+retyping a whole body would mean retyping sentences nobody has read in full.
+An insertion anchored on a phrase that was read in full changes exactly what it
+claims to and leaves everything else alone.
 
-Now: the boxes show what the person holds, the ticked set is the answer — added
-if missing, removed if unticked — and removal exists as its own action against
-both tables that record access, logged as a security event. Granting access is
-routine; removing it is what somebody asks about six months later.
-
-An empty selection means no school access, which an administrator needs to be
-able to do. It reads as a decision rather than an accident because the dialog
-now shows what they had before they submit.
+Guarded on the sentence not already being present, so it is re-runnable, and
+the check at the end prints whether each template actually took it — 344
+reported success while changing nothing, and that is the failure this pattern
+is avoiding.
