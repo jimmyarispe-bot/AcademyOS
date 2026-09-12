@@ -173,6 +173,14 @@ function QuestionField({
 
   if (question.type === "program_selector") {
     const selected = new Set(normalizeInterestProgramSelections(value));
+    /**
+     * The network's five programme types are the default, not the law. A
+     * campus that runs two of them says so in its own question, and the
+     * validator holds the server to the same narrower list.
+     */
+    const programOptions = question.options?.length
+      ? question.options
+      : INTEREST_FORM_PROGRAM_OPTIONS;
     return (
       <div className="sm:col-span-2">
         <fieldset>
@@ -184,7 +192,7 @@ function QuestionField({
             {question.helpText ?? INTEREST_FORM_PROGRAM_QUESTION_HELP}
           </p>
           <div className="mt-3 grid gap-2">
-            {INTEREST_FORM_PROGRAM_OPTIONS.map((option) => {
+            {programOptions.map((option) => {
               const checked = selected.has(option.value);
               const optionId = `${id}-${option.value}`;
               return (

@@ -1,25 +1,15 @@
-Admissions: the high school's five questions go to the student
+Admissions: campuses without a building stop offering tours
 
-Version 14 took the "Student Section" out of the inquiry form, because a parent
-typing answers on behalf of a teenager who is not in the room is worth less than
-asking nobody. This is the other half: the student gets the questions in an
-email of their own, answers them in their own words, and the answers land on the
-admissions case where staff read everything else.
+The thank-you page told every family "schedule your tour or meeting". The high
+school and Virtual have no building to tour, and inviting somebody to walk
+around a school that does not exist is the kind of small wrongness a family
+notices and a school never hears about. They now offer to schedule a day and
+time to meet virtually.
 
-The form already promises exactly this — "Your student will be sent a few
-questions for him/her to complete once you submit this form." Until now that was
-a promise nothing kept.
+Driven by a column on the school, not a list of names in the code. The obvious
+shortcut works until somebody renames a campus in the admin screen, at which
+point the page silently starts offering tours again and nothing reports a
+problem. Whether a campus meets families in person is a fact about the campus.
 
-No account. A fourteen-year-old will not create one, and requiring it would cost
-more answers than it protects. The link follows the token design in migration
-230: 256 bits minted in the application, only the SHA-256 digest stored, both
-the resolve and the submit behind SECURITY DEFINER functions that fail closed
-and hand back the student's first name and the school's name and nothing else.
-
-The database keeps its own copy of the five accepted keys and caps each answer,
-because this runs for anyone holding a link. A test reads the migration and
-checks the two lists still agree.
-
-Also in this ship: v14 itself, which removes that section, relabels the
-student's email address to say what it is for, and asks the high school the
-scholarship question Virtual already asked.
+Defaults to false — a school that has not said otherwise has a front door — so
+Florida and Georgia are unaffected.

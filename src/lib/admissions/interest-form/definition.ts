@@ -276,7 +276,21 @@ export function validateInterestSubmission(input: {
       }
       case "program_selector": {
         const selected = normalizeInterestProgramSelections(raw);
-        if (selected.some((value) => !isInterestFormProgramValue(value))) {
+        /**
+         * A program question may narrow the list — the high school offers only
+         * virtual and hybrid, and its question says so. Where it does, that
+         * narrower list is what the server accepts: otherwise the page would
+         * show two choices while the server quietly took all five, and a posted
+         * form could record interest in a programme the campus does not run.
+         */
+        const declared = question.options ?? [];
+        const permitted = declared.length
+          ? new Set(declared.map((option) => option.value))
+          : null;
+        const invalid = selected.some((value) =>
+          permitted ? !permitted.has(value) : !isInterestFormProgramValue(value)
+        );
+        if (invalid) {
           issues.push({
             path: question.key,
             message: "Select a valid program type.",
