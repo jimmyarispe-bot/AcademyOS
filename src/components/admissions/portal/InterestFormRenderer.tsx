@@ -41,6 +41,90 @@ function defaultValues(published: PublishedInterestForm): InterestFormValues {
   return values;
 }
 
+
+function FileQuestion({
+  question,
+  value,
+  onChange,
+}: {
+  question: InterestQuestionDefinition;
+  value: string;
+  onChange: (key: string, next: unknown) => void;
+}) {
+  const id = question.key;
+  const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle");
+  const [message, setMessage] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+
+  async function upload(file: File) {
+    setStatus("uploading");
+    setMessage(null);
+    try {
+      const body = new FormData();
+      body.set("file", file);
+      const response = await fetch("/api/apply/upload", { method: "POST", body });
+      const result = (await response.json()) as {
+        path?: string;
+        fileName?: string;
+        error?: string;
+      };
+      if (!response.ok || !result.path) {
+        throw new Error(result.error ?? "We could not save that file.");
+      }
+      onChange(question.key, result.path);
+      setFileName(result.fileName ?? file.name);
+      setStatus("idle");
+    } catch (err) {
+      // The answer is cleared on failure. Leaving a previous path in place
+      // would tell the family their new file was accepted when it was not.
+      onChange(question.key, "");
+      setFileName(null);
+      setStatus("error");
+      setMessage(err instanceof Error ? err.message : "We could not save that file.");
+    }
+  }
+
+  return (
+    <div className="sm:col-span-2">
+      <label className={portalLabelClass} htmlFor={id}>
+        {question.label}
+        {question.required ? " *" : ""}
+      </label>
+      {question.helpText ? (
+        <p className="mt-1 text-sm text-slate-500">{question.helpText}</p>
+      ) : null}
+
+      <input
+        id={id}
+        type="file"
+        accept=".pdf,.jpg,.jpeg,.png,.heic,.heif"
+        className="mt-2 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-brand-700 hover:file:bg-brand-100"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void upload(file);
+        }}
+      />
+
+      {/* What actually submits. `required` lives here so an empty upload fails
+          the same way an empty text box does. */}
+      <input type="hidden" name={id} value={value} required={question.required} />
+
+      {status === "uploading" && (
+        <p className="mt-1 text-sm text-slate-500">Uploading…</p>
+      )}
+      {status === "error" && message && (
+        <p className="mt-1 text-sm text-red-700" role="alert">
+          {message}
+        </p>
+      )}
+      {value && fileName && status === "idle" && (
+        <p className="mt-1 text-sm text-emerald-700">Attached: {fileName}</p>
+      )}
+      <p className="mt-1 text-xs text-slate-400">PDF, JPG or PNG, up to 10MB.</p>
+    </div>
+  );
+}
+
 function QuestionField({
   question,
   value,
@@ -327,6 +411,70 @@ function QuestionField({
    * any commas anyway, because a parent copying "$10,463.00" is reading
    * correctly and should not be told they are wrong.
    */
+  /**
+   * A statement, and the name the person types to stand behind it.
+   *
+   * The statement is the label and it is rendered in full, as body text rather
+   * than as a form label, because it is something to read rather than a caption
+   * on a box. Long text set in a small grey label is text nobody reads, and an
+   * unread acknowledgement is worth nothing to anybody.
+   *
+   * No date field. The submission already records `submitted_at`, and a second
+   * date the parent can type is a date that can disagree with the record.
+   */
+  /**
+   * A document upload, for a family who has no account yet.
+   *
+   * The file goes to /api/apply/upload the moment it is chosen, and what is
+   * kept in the form is the storage path that route returns. Uploading on
+   * choose rather than on submit means a parent learns their file is too large
+   * while they are still looking at the field, instead of after filling in
+   * everything else.
+   *
+   * The hidden input is what actually submits. The file input itself has no
+   * name, deliberately — a File in the FormData would be a second copy of a
+   * document already in storage, and a request body large enough to be refused.
+   */
+  if (question.type === "file") {
+    return (
+      <FileQuestion
+        question={question}
+        value={typeof value === "string" ? value : ""}
+        onChange={onChange}
+      />
+    );
+  }
+
+  if (question.type === "signature") {
+    return (
+      <div className="sm:col-span-2">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-sm leading-relaxed text-slate-800">{question.label}</p>
+          <div className="mt-4">
+            <label className={portalLabelClass} htmlFor={id}>
+              Signature{question.required ? " *" : ""}
+            </label>
+            <input
+              id={id}
+              name={id}
+              type="text"
+              autoComplete="name"
+              className={portalInputClass}
+              placeholder="Type your full name"
+              value={text}
+              onChange={(e) => onChange(question.key, e.target.value)}
+              required={question.required}
+              aria-describedby={`${id}-sig-note`}
+            />
+            <p id={`${id}-sig-note`} className="mt-1 text-sm text-slate-500">
+              Typing your full name here is your signature, dated today.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (question.type === "currency") {
     return (
       <div>

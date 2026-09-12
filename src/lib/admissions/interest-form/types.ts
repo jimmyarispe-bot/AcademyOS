@@ -20,7 +20,21 @@ export type InterestFieldType =
   | "boolean"
   | "school_selector"
   | "program_selector"
-  | "consent";
+  | "consent"
+  /**
+   * A typed-name signature against a statement.
+   *
+   * The statement is the question's label; the answer is the name the person
+   * types. The date is not a separate field — the submission already carries
+   * `submitted_at`, and a second date a parent can edit is a date that can
+   * disagree with the record.
+   */
+  | "signature"
+  /**
+   * A document. The stored answer is the storage path returned by
+   * /api/apply/upload, never the file itself and never a name the browser chose.
+   */
+  | "file";
 
 export type InterestOptionSource = "grades" | "funding_sources" | "programs" | "schools";
 

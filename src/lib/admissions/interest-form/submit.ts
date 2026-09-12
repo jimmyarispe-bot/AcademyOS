@@ -11,7 +11,10 @@ import {
 } from "@/lib/admissions/interest-form/definition";
 import { loadPublishedInterestForm } from "@/lib/admissions/interest-form/load";
 import { resolveInterestFormOrganization } from "@/lib/admissions/interest-form/org-resolve";
-import type { InterestFormValues } from "@/lib/admissions/interest-form/types";
+import type {
+  InterestFormValues,
+  PublishedInterestForm,
+} from "@/lib/admissions/interest-form/types";
 import { recordInitialStage } from "@/lib/admissions/workflow";
 import { onInquirySubmitted } from "@/lib/admissions/communications/triggers";
 import type { GradeValue } from "@/lib/constants/grades";
@@ -158,6 +161,68 @@ async function persistInterestSubmission(input: {
   return { submissionId };
 }
 
+
+/**
+ * Attach the documents a family uploaded to the lead their inquiry created.
+ *
+ * The files are already in storage — the upload route put them there while the
+ * parent was still filling the form in, under a quarantine prefix and a name
+ * this server generated. What was missing until now is the record saying whose
+ * they are.
+ *
+ * `application_documents.lead_id` comes from migration 326, which also rewrote
+ * the staff read policy to resolve a school through the lead when there is no
+ * application. Without that policy change a row inserted here would be
+ * invisible to every member of staff — an upload that succeeded, reported
+ * success, and was seen by nobody.
+ *
+ * The cast is narrow and deliberate: 326 is hand-run, so `lead_id` is absent
+ * from the generated database types and `application_id` still reads as
+ * non-nullable there. Naming only this insert keeps every other query in this
+ * file type-checked.
+ *
+ * A failure here is logged, not thrown. The family's inquiry is already saved
+ * and telling them it failed would be untrue; a document nobody can see is a
+ * problem for staff to chase, not a reason to lose the lead.
+ */
+async function attachInquiryDocuments(input: {
+  leadId: string;
+  definition: PublishedInterestForm["definition"];
+  values: InterestFormValues;
+}): Promise<void> {
+  const uploads = input.definition.questions
+    .filter((question) => question.type === "file")
+    .map((question) => ({
+      question,
+      path: typeof input.values[question.key] === "string"
+        ? String(input.values[question.key]).trim()
+        : "",
+    }))
+    .filter((entry) => entry.path !== "");
+
+  if (!uploads.length) return;
+
+  const admin = createServiceRoleClient();
+  const { error } = await admin.from("application_documents").insert(
+    uploads.map((entry) => ({
+      lead_id: input.leadId,
+      application_id: null,
+      document_type: entry.question.key,
+      document_status: "uploaded",
+      file_name: entry.question.label.slice(0, 200),
+      storage_path: entry.path,
+    })) as never
+  );
+
+  if (error) {
+    console.error("[interest-form] uploaded documents were not attached to the lead", {
+      leadId: input.leadId,
+      count: uploads.length,
+      error: error.message,
+    });
+  }
+}
+
 /**
  * Submit Express Interest against the server-resolved published form.
  * Client-supplied organization_id / form ownership is ignored.
@@ -265,6 +330,12 @@ export async function submitPublishedInterestForm(
 
   await recordInitialStage(admin, leadId, null);
   await onInquirySubmitted(admin, leadId);
+
+  await attachInquiryDocuments({
+    leadId,
+    definition: published.definition,
+    values: visible,
+  });
 
   const persisted = await persistInterestSubmission({
     organizationId: org.organizationId,

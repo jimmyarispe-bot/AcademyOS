@@ -268,6 +268,29 @@ export function validateInterestSubmission(input: {
       case "consent":
         visibleValues[question.key] = Boolean(raw);
         break;
+      case "file": {
+        /**
+         * The answer is a storage path, and the only paths accepted are ones
+         * the upload route would have produced. A client posting the form
+         * directly could otherwise name any object in the bucket and have it
+         * attached to their own inquiry, which is somebody else's document
+         * handed to a stranger.
+         */
+        const path = String(raw).trim();
+        if (!/^interest-uploads\/[0-9a-f-]{36}\.(pdf|jpg|png|heic|heif)$/.test(path)) {
+          issues.push({ path: question.key, message: "Please re-attach that file." });
+        } else {
+          visibleValues[question.key] = path;
+        }
+        break;
+      }
+      case "signature": {
+        // A signature is the name, trimmed. Emptiness is already handled by
+        // `required` above; anything else a person types is their own name and
+        // is not ours to second-guess.
+        visibleValues[question.key] = String(raw).trim();
+        break;
+      }
       case "currency":
       case "number": {
         // A parent typing an award amount may well type the dollar sign and

@@ -1,47 +1,49 @@
-Parents: invitations, and the ninth GA GOAL eligibility route
+Admissions: families can attach the documents the form asks for
 
-PARENT INVITATIONS. Nothing here is new machinery. createManagedUser already
-creates the auth user, delivers the invitation through Resend rather than
-Supabase SMTP, and gates the account behind invite_activation until the person
-sets a password at /login/activate. A PARENT role already exists with its own
-permission group. None of it had ever been pointed at a guardian.
+The GA GOAL section NAMED its documents and offered nowhere to put them. That
+was honest about the constraint and useless to a parent, who read "you will be
+asked to provide proof of income" and reasonably looked for a button.
 
-The one genuinely missing step is one line: setting guardians.user_id so the
-account a parent activates connects to the family record the portal reads.
-Without it a parent signs in successfully and sees nothing — the worst of the
-three possible outcomes, because it looks like it worked. That write checks its
-error, since an invitation that landed and a link that did not is the one
-combination producing a confused family and no trace of why.
+A `file` field type, a public upload route, and the rows that say whose the
+documents are.
 
-Not inviteManagedUsers: it invents a name from the email local part, so
-katieallen315@yahoo.com becomes "Katieallen315 User". For staff typing addresses
-into a box that is a fair guess; for guardians we hold real names.
+WHY A ROUTE HANDLER, NOT A SERVER ACTION. Server actions cap bodies at 1MB. A
+photograph of an award letter taken on a phone is routinely three to five, so a
+server action would reject the most common case while passing every test with a
+small PDF.
 
-THIS SENDS REAL EMAIL TO REAL FAMILIES, so the safeguards are the feature:
-nothing is selected by default, the caller must type SEND, there is no
-invite-everyone-everywhere path, one campus at a time, and a batch cap of 50 so
-a mistake reaches fifty families rather than all of them. Eligibility is
-re-checked at send time, not only in the preview — a list is minutes old by the
-time somebody clicks, and inviting a parent twice sends a second set of
-credentials for an account they already activated.
+WHY NOT BROWSER-TO-STORAGE. That is what the parent portal does and it works
+there because the parent is signed in and row policies decide what they may
+write. On a public form there is no account, and handing an unauthenticated
+browser storage credentials is how a bucket becomes somebody else's file host.
+Content type against an allowlist, ten megabyte cap, rate limited by IP, and the
+path generated server-side — a filename from a browser is attacker-controlled
+and never becomes a path.
 
-Skipped guardians are listed with the reason rather than filtered away. A list
-that quietly omits half a campus is a list nobody can check.
+THE PATH IS VALIDATED AGAIN ON SUBMIT. The answer to a file question is a
+storage path supplied by the client, so only paths shaped like the ones the
+upload route issues are accepted. Without that check a person could name any
+object in the bucket and have somebody else's document attached to their own
+inquiry. Seven tests, including traversal and a non-uuid name.
 
-CAUGHT BY THE REPOSITORY'S OWN CHECK: the client list imported its batch
-constant from the module that imports the service-role client, which would have
-dragged server-only code into the browser bundle. The constant now lives alone.
-That check exists for exactly this and it earned its keep.
+Uploading happens on choose rather than on submit, so a parent learns their file
+is too large while looking at the field instead of after filling in everything
+else. A failed upload clears the stored path rather than leaving the previous
+one, which would say the new file was accepted when it was not.
 
-GA GOAL, ninth route: a scholarship already held from another Student
-Scholarship Organization at a different private school. A child transferring
-from another private school cannot satisfy "six weeks in a Georgia public school
-immediately prior", so without this every transferring family reads as
-ineligible. It comes from GOAL's own Submit a New Student guidance and NOT from
-the statute text this form otherwise quotes verbatim; Georgia's SSO chapter
-makes each organization solely responsible for verifying eligibility, so GOAL is
-the authority on its own list. The wording describes the family's situation
-rather than asserting a legal conclusion.
+A SECOND SIGNATURE for GA GOAL: that the ticked eligibility criteria are true
+and the documents are genuine. The v10 taxpayer pledge is a different thing —
+that is about supporting the fund and every Georgia family signs it. This one
+attests to claims that decide whether a scholarship is awarded, and only the
+families making those claims see it.
+
+DEPENDS ON MIGRATION 326, WHICH IS STILL UNRUN. Each upload becomes a row in
+application_documents against the LEAD, since no application exists yet. 326
+adds lead_id and rewrites the staff read policy to resolve a school through the
+lead — without it those rows are invisible to every member of staff, which is an
+upload that succeeded, reported success, and was seen by nobody.
+
+Run 326, then ship, then run 337.
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_014B9rkuWAq2petze3CoyFp6
