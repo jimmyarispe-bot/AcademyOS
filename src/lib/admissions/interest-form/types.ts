@@ -13,6 +13,8 @@ export type InterestFieldType =
   | "phone"
   | "date"
   | "number"
+  /** A number shown and validated as money. Stored as a plain number. */
+  | "currency"
   | "select"
   | "multiselect"
   | "boolean"

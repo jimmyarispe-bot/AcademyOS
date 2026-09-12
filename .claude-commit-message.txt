@@ -1,43 +1,31 @@
-Forms: a condition can ask what a multiselect contains, and Georgia uses it
+Admissions: money looks like money
 
-GA's scholarship question is a multiselect, and until now no condition could ask
-what one held. `eq` compares an array to a string and is never true. `in` asks
-whether the ANSWER appears in a list supplied by the rule — the opposite
-question. So "did this family tick GA GOAL?" was unanswerable, and every
-Georgia family would have seen the GOAL eligibility questions whether they were
-applying for it or not.
+A new `currency` field type. It renders as a number field with a dollar sign
+inside it, on the left, where a parent copying a figure off an award letter can
+see what the box wants while they are typing into it. A label reading
+"amount ($)" is read once and then forgotten during the part that matters.
 
-A `contains` operator is added to the platform forms condition engine: the value
-at `path` is a list and it holds `value`, compared as strings because a
-multiselect arrives from FormData as strings while a rule may carry a number.
-Six tests, including the one that keeps it honest — an answer that is not a list
-returns false rather than throwing, which is what a question changed from select
-to multiselect leaves behind in older submissions.
+The stored value is unchanged — a plain number. The symbol is decoration and
+nobody has to type or delete it.
 
-Interest form v6 then asks what Georgia actually asks:
+THE VALIDATOR NOW READS WHAT PARENTS ACTUALLY TYPE. Number("$10,463.00") is NaN.
+A parent copying that figure off the letter in front of them is reading
+correctly, and telling them it is not a valid number is how a form loses a
+family who did nothing wrong. Dollar signs, commas and spaces are stripped
+before parsing. Five tests, including the one that keeps it honest: "about ten
+thousand" is still rejected.
 
-  * GA Special Needs collects the STUDENT ID as well as the award amount, and
-    both appear only when that scholarship is ticked. The amount was previously
-    shown to every Georgia family.
-  * GA GOAL gets its own section carrying the eligibility rule in the law's own
-    words, with a checkbox for each route to qualifying — the two base paths and
-    the five waivers of the six-week attendance requirement.
-  * A proof-of-income choice, and a FERPA acknowledgement that appears only when
-    the diagnosis waiver is ticked — a condition on a multiselect answer, which
-    is the new operator being used twice.
-  * The GOAL narrative now appears for GOAL and Academy-Based applicants only,
-    which is what the paper form says and what the question text already claimed.
+fl_scholarship_amount and ga_special_needs_amount become currency in interest
+form v9. "GTID" becomes "GA Special Needs Scholarship GTID" — on its own the
+acronym sat under a heading and left a parent to infer which of their
+scholarships it belonged to.
 
-THE DOCUMENTS ARE NAMED BUT NOT UPLOADED. GOAL requires proof of income and one
-proof of eligibility per route, PDF/JPG/PNG. The form engine has no file field
-and uploads belong to the application stage, where a parent has an account and
-DocumentCenter already works. The section tells families exactly what to gather;
-collecting it is the next build.
+The key stays ga_gtid. It moved in v7 an hour ago because nothing had been
+answered under it, and that is still true — but a key should stop moving once it
+is right.
 
-NOT ADDED, DELIBERATELY: GOAL's document list implies a route the statute text
-does not mention — proof of an SSO scholarship award from another private
-school. That is an eligibility claim, not a wording choice, so it is flagged
-rather than invented.
+SHIP BEFORE RUNNING THE MIGRATION. An unknown field type falls through to the
+generic text input: it works, and it shows no symbol.
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_014B9rkuWAq2petze3CoyFp6

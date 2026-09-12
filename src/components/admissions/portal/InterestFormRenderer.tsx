@@ -277,7 +277,7 @@ function QuestionField({
         ? "tel"
         : question.type === "date"
           ? "date"
-          : question.type === "number"
+          : question.type === "number" || question.type === "currency"
             ? "number"
             : "text";
 
@@ -314,6 +314,50 @@ function QuestionField({
     question.type === "date" && typeof text === "string" && text.trim() !== ""
       ? ageLabelFromDateOfBirth(text)
       : null;
+
+  /**
+   * Money gets a dollar sign, and it sits INSIDE the field rather than in the
+   * label. A parent reading an award letter is copying a figure across; the
+   * symbol beside the box they are typing into is what tells them the box wants
+   * dollars, and a label saying "amount ($)" is read once and then forgotten
+   * while they type.
+   *
+   * The input stays type="number" — the symbol is decoration, not a character
+   * anyone has to type or delete. The submit validator strips a typed "$" and
+   * any commas anyway, because a parent copying "$10,463.00" is reading
+   * correctly and should not be told they are wrong.
+   */
+  if (question.type === "currency") {
+    return (
+      <div>
+        {label}
+        <div className="relative">
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-500"
+          >
+            $
+          </span>
+          <input
+            id={id}
+            name={id}
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="0.01"
+            className={`${portalInputClass} pl-7`}
+            placeholder={question.placeholder}
+            value={text}
+            onChange={(e) => onChange(question.key, e.target.value)}
+            required={question.required}
+          />
+        </div>
+        {question.helpText ? (
+          <p className="mt-1 text-sm text-slate-500">{question.helpText}</p>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div>

@@ -268,8 +268,15 @@ export function validateInterestSubmission(input: {
       case "consent":
         visibleValues[question.key] = Boolean(raw);
         break;
+      case "currency":
       case "number": {
-        const n = typeof raw === "number" ? raw : Number(raw);
+        // A parent typing an award amount may well type the dollar sign and
+        // the thousands separator they see on the letter in front of them.
+        // Number("$10,463.00") is NaN, and rejecting a correctly-read figure
+        // for its punctuation is the kind of validation that makes people give
+        // up on a form.
+        const n =
+          typeof raw === "number" ? raw : Number(String(raw).replace(/[$,\s]/g, ""));
         if (!Number.isFinite(n)) {
           issues.push({ path: question.key, message: "Enter a valid number." });
         } else {
