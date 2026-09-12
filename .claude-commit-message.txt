@@ -1,20 +1,24 @@
-Students: somewhere to write down what staff know about a child
+Platform: every email address and phone number is clickable
 
-The student profile had twenty-five sections and no notes. Admissions has had
-them all along, so everything learned about a child during admissions stopped
-at the point they enrolled, and the teacher or school leader who learned
-something afterwards had nowhere to put it.
+Two places in the whole product made contact details tappable — the People
+Directory and the admissions waiting list. Everywhere else they were plain
+text, which on a phone means reading a number off the screen and typing it into
+the dialler. Staff read these on a phone as often as at a desk.
 
-Platform notes rather than a second notes table. Those rows are keyed on
-(entity_type, entity_id), so one panel serves a student today and an employee
-or a family the day somebody asks, and a note keeps its author, category and
-pin wherever it is read. Categories — academic, behavior, medical, family,
-compliance, financial — and pinning, which is what keeps "carries an EpiPen"
-above eighteen months of routine notes. Staff visibility, author and timestamp
-recorded, no edit or delete from this panel.
+EmailLink and PhoneLink, used across the admissions case, the lead list, the
+executive dashboard, the student profile's guardians and emergency contacts,
+families, HR, the staff directory, the parent invite list and the admin user
+tables.
 
-Also a guard test. A student section is defined in one file and given a
-component in another, and the registration loop skips any section without one —
-no error, no warning, the tab simply is not there. The admissions case had the
-same shape and cost a shipped feature that rendered "Section module is not
-registered". Both profiles now fail a test rather than a user.
+Neither reformats what is shown. The number a family gave is how that family
+recognises their own number, so the display stays exactly as stored and only
+the dial target is normalised — ten digits get +1, an international number
+keeps its own prefix, an extension is dropped rather than gambled on because
+some diallers silently fail on `;ext=`. A value that is not an address or a
+number renders as plain text rather than disappearing: "ask mum" is still the
+only contact detail on file.
+
+Also fixes ProfileItem title-casing anything it was given, which is why the
+questionnaire panel read "Jimmy.Arispe@Gmail.Com" — CSS capitalising an address
+that is not capitalised anywhere else and that a reader might retype. It now
+applies only to plain strings, which is what it was written for.

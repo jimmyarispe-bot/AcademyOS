@@ -3,6 +3,7 @@
 import { createJobApplicationAction, createJobPostingAction, updateApplicationStageAction } from "@/lib/hr/actions";
 import { ActionButton, useActionFeedback } from "@/components/experience-system/feedback";
 import { assertActionResult } from "@/components/experience-system/feedback/runMutation";
+import { EmailLink } from "@/components/platform/contact/ContactLink";
 
 const inputClass = "mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm";
 
@@ -67,7 +68,9 @@ export function RecruitingPanel({ jobs, applications, schools }: RecruitingPanel
           {applications.map((a) => (
             <li key={a.id as string} className="rounded-lg border border-slate-100 p-3 text-sm">
               <p className="font-medium">{a.candidate_name as string}</p>
-              <p className="text-slate-500">{a.candidate_email as string}</p>
+              <p className="text-slate-500">
+                <EmailLink email={a.candidate_email as string | null} />
+              </p>
               <form
                 className="mt-2 flex flex-wrap items-center gap-2"
                 onSubmit={(e) => {

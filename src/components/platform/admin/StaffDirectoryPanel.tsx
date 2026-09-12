@@ -1,4 +1,5 @@
 import { ActionChip } from "@/components/experience-system/feedback/ActionChip";
+import { EmailLink } from "@/components/platform/contact/ContactLink";
 
 interface StaffDirectoryPanelProps {
   entries: Array<{
@@ -61,7 +62,9 @@ export function StaffDirectoryPanel({ entries }: StaffDirectoryPanelProps) {
               {profile?.contact_email && (
                 <div>
                   <dt className="inline font-medium">Email: </dt>
-                  <dd className="inline">{profile.contact_email}</dd>
+                  <dd className="inline">
+                    <EmailLink email={profile.contact_email} />
+                  </dd>
                 </div>
               )}
               {profile?.phone_extension && (

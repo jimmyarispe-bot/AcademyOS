@@ -36,6 +36,7 @@ import type { Family, GuardianRecord, SisEnrollment, StudentRecord } from "@/lib
 import { isStudentProfileEnvelope } from "@/lib/students/profile/types";
 import type { PlatformEntityTag } from "@/lib/platform/tags/types";
 import type { PlatformRelationship } from "@/lib/platform/relationships/types";
+import { EmailLink, PhoneLink } from "@/components/platform/contact/ContactLink";
 
 function displayName(student: StudentRecord): string {
   return student.preferred_name
@@ -406,8 +407,16 @@ export function FamilySection(props: ProfileSectionViewProps) {
                     <li key={g.id} className="rounded-lg bg-slate-50 px-3 py-2">
                       {g.first_name} {g.last_name}
                       {g.is_primary && <span className="ml-2 text-xs text-brand-600">Primary</span>}
-                      {g.email && <span className="ml-2 text-slate-500">{g.email}</span>}
-                      {g.phone && <span className="ml-2 text-slate-500">{g.phone}</span>}
+                      {g.email && (
+                        <span className="ml-2">
+                          <EmailLink email={g.email} />
+                        </span>
+                      )}
+                      {g.phone && (
+                        <span className="ml-2">
+                          <PhoneLink phone={g.phone} />
+                        </span>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -470,7 +479,11 @@ export function FamilySection(props: ProfileSectionViewProps) {
                       <span className="font-medium capitalize">{String(c.contact_type ?? "contact").replace(/_/g, " ")}</span>
                       {" — "}
                       {String(c.first_name)} {String(c.last_name)}
-                      {c.phone ? <span className="ml-2 text-slate-500">{String(c.phone)}</span> : null}
+                      {c.phone ? (
+                        <span className="ml-2">
+                          <PhoneLink phone={String(c.phone)} />
+                        </span>
+                      ) : null}
                     </li>
                   ))}
                 </ul>

@@ -4,6 +4,7 @@ import {
 } from "@/components/platform/profile-workspace/ProfilePrimitives";
 import type { ProfileSectionViewProps } from "@/lib/platform/profile/sections/types";
 import { missing } from "./shared";
+import { EmailLink, PhoneLink } from "@/components/platform/contact/ContactLink";
 
 export function ProspectSection(props: ProfileSectionViewProps) {
   const data = props.data as {
@@ -39,10 +40,10 @@ export function ProspectSection(props: ProfileSectionViewProps) {
             value={`${lead.guardian_first_name ?? ""} ${lead.guardian_last_name ?? ""}`.trim() || "—"}
           />
           {Boolean(lead.guardian_email) && (
-            <ProfileItem label="Email" value={String(lead.guardian_email)} />
+            <ProfileItem label="Email" value={<EmailLink email={String(lead.guardian_email)} />} />
           )}
           {Boolean(lead.guardian_phone) && (
-            <ProfileItem label="Phone" value={String(lead.guardian_phone)} />
+            <ProfileItem label="Phone" value={<PhoneLink phone={String(lead.guardian_phone)} />} />
           )}
         </div>
       </ProfileCard>

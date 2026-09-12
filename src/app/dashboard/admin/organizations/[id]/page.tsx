@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { requirePagePermission } from "@/lib/platform/identity/page-guard";
 import { getOrganizationDetail } from "@/lib/platform/identity/organizations";
 import { createAuthClient } from "@/lib/supabase/server-auth";
+import { EmailLink } from "@/components/platform/contact/ContactLink";
 
 export default async function OrganizationDetailAdminPage({
   params,
@@ -69,7 +70,13 @@ export default async function OrganizationDetailAdminPage({
           <p className="mt-3 text-sm font-medium text-slate-900">
             {owner?.full_name ?? "Unassigned"}
           </p>
-          <p className="text-sm text-slate-500">{owner?.email ?? organization.ownerUserId ?? "—"}</p>
+          <p className="text-sm text-slate-500">
+            {owner?.email ? (
+              <EmailLink email={owner.email} />
+            ) : (
+              (organization.ownerUserId ?? "—")
+            )}
+          </p>
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5">

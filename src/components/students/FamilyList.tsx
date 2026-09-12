@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Family } from "@/lib/students/queries";
+import { EmailLink } from "@/components/platform/contact/ContactLink";
 
 interface FamilyListProps {
   families: Family[];
@@ -41,7 +42,9 @@ export function FamilyList({ families }: FamilyListProps) {
               <p className="mt-2 text-sm text-slate-600">{family.primary_address}</p>
             )}
             {family.billing_email && (
-              <p className="mt-1 text-xs text-slate-400">{family.billing_email}</p>
+              <p className="mt-1 text-xs">
+                <EmailLink email={family.billing_email} />
+              </p>
             )}
             <p className="mt-2 text-xs capitalize text-slate-500">{family.status}</p>
           </Link>

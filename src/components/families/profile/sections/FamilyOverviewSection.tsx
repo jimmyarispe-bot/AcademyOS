@@ -13,6 +13,7 @@ import type { PlatformActivityEvent } from "@/lib/platform/activity/types";
 import type { PlatformEntityTag } from "@/lib/platform/tags/types";
 import type { PlatformRelationship } from "@/lib/platform/relationships/types";
 import { isFamilyProfileEnvelope } from "@/lib/families/profile/types";
+import { EmailLink } from "@/components/platform/contact/ContactLink";
 
 interface OverviewMetrics {
   studentCount: number;
@@ -218,7 +219,7 @@ export function FamilyOverviewSection(props: ProfileSectionViewProps) {
             <ProfileItem label="School" value={schoolName(data.family)} />
             <ProfileItem
               label="Billing email"
-              value={String(data.family.billing_email ?? "—")}
+              value={<EmailLink email={data.family.billing_email as string | null} />}
             />
             <ProfileItem
               label="Address"

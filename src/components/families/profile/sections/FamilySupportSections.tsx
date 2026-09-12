@@ -13,6 +13,7 @@ import {
   missingSection,
   nestedName,
 } from "@/components/families/profile/sections/shared";
+import { PhoneLink } from "@/components/platform/contact/ContactLink";
 
 const contactColumns = [
   {
@@ -128,7 +129,7 @@ export function MedicalSection(props: ProfileSectionViewProps) {
             <ProfileItem label="Medications" value={jsonList(medical.medications)} />
             <ProfileItem label="Diagnoses" value={jsonList(medical.diagnoses)} />
             <ProfileItem label="Physician" value={formatLabel(medical.physician_name)} />
-            <ProfileItem label="Physician phone" value={formatLabel(medical.physician_phone)} />
+            <ProfileItem label="Physician phone" value={<PhoneLink phone={medical.physician_phone as string | null} />} />
             <ProfileItem label="Insurance" value={formatLabel(medical.insurance_carrier)} />
             <ProfileItem
               label="Emergency medical plan"

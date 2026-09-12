@@ -7,6 +7,7 @@ import { formatCount, formatCurrency } from "@/lib/format";
 import { getAdmissionsDashboardTiles } from "@/lib/admissions/registry";
 import type { ExecutiveAdmissionsMetrics, DrillDownLead } from "@/lib/admissions/executive-metrics";
 import { ActionChip } from "@/components/experience-system/feedback/ActionChip";
+import { EmailLink } from "@/components/platform/contact/ContactLink";
 
 interface ExecutiveAdmissionsDashboardProps {
   metrics: ExecutiveAdmissionsMetrics;
@@ -168,7 +169,9 @@ export function ExecutiveAdmissionsDashboard({
                     <td className="py-2 pr-4 capitalize text-slate-600">
                       {lead.lead_stage.replace(/_/g, " ")}
                     </td>
-                    <td className="py-2 pr-4 text-slate-600">{lead.guardian_email ?? "—"}</td>
+                    <td className="py-2 pr-4 text-slate-600">
+                      <EmailLink email={lead.guardian_email} />
+                    </td>
                     <td className="py-2 text-slate-600">{lead.inquiry_date}</td>
                   </tr>
                 ))}

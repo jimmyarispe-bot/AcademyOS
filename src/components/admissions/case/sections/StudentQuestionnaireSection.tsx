@@ -5,6 +5,7 @@ import {
 import type { ProfileSectionViewProps } from "@/lib/platform/profile/sections/types";
 import { STUDENT_QUESTIONS } from "@/lib/admissions/student-questionnaire/questions";
 import { missing } from "./shared";
+import { EmailLink } from "@/components/platform/contact/ContactLink";
 
 type QuestionnaireRow = {
   id: string;
@@ -58,7 +59,7 @@ export function StudentQuestionnaireSection(props: ProfileSectionViewProps) {
             }
           >
             <div className="grid gap-2 text-sm sm:grid-cols-2">
-              <ProfileItem label="Sent to" value={row.student_email ?? "—"} />
+              <ProfileItem label="Sent to" value={<EmailLink email={row.student_email} />} />
               <ProfileItem label="Sent" value={when(row.sent_at)} />
               <ProfileItem label="Opened" value={when(row.opened_at)} />
               <ProfileItem

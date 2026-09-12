@@ -9,11 +9,24 @@ export function ProfileCard({ title, children }: { title: string; children: Reac
   );
 }
 
-export function ProfileItem({ label, value }: { label: string; value: string }) {
+/**
+ * A labelled value.
+ *
+ * `capitalize` applies only to plain strings, which is what it was written for
+ * — a grade or a status stored lower case. It was being applied to everything,
+ * which is why an email address rendered as "Jimmy.Arispe@Gmail.Com": CSS
+ * title-casing an address that is not title-cased anywhere else, and that a
+ * reader may well try to retype.
+ *
+ * A ReactNode value — a link, a badge, anything already formatted — is rendered
+ * as given. The caller has decided how it should look.
+ */
+export function ProfileItem({ label, value }: { label: string; value: ReactNode }) {
+  const isPlainText = typeof value === "string" || typeof value === "number";
   return (
     <div>
       <dt className="text-xs uppercase text-slate-400">{label}</dt>
-      <dd className="text-sm text-slate-900 capitalize">{value}</dd>
+      <dd className={`text-sm text-slate-900 ${isPlainText ? "capitalize" : ""}`}>{value}</dd>
     </div>
   );
 }

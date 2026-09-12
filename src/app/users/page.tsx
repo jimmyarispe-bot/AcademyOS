@@ -1,5 +1,6 @@
 import { OrgAdminShell, RoleBadge } from "@/components/organization-platform/OrgAdminShell";
 import { getOrganizationPlatform } from "@/lib/platform/organization-platform";
+import { EmailLink } from "@/components/platform/contact/ContactLink";
 
 export const metadata = {
   title: "Users · Organization Platform · JAG",
@@ -34,7 +35,9 @@ export default async function UsersPage() {
                 <tr key={user.id} className="border-b border-slate-100 last:border-0 align-top">
                   <td className="px-4 py-3">
                     <p className="font-medium text-slate-900">{user.fullName}</p>
-                    <p className="text-xs text-slate-500">{user.email}</p>
+                    <p className="text-xs text-slate-500">
+                      <EmailLink email={user.email} />
+                    </p>
                   </td>
                   <td className="px-4 py-3 text-slate-600">{user.status}</td>
                   <td className="px-4 py-3">

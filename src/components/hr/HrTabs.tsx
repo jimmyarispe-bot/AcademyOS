@@ -10,6 +10,7 @@ import type {
   PayrollRecord,
   Position,
 } from "@/lib/hr/types";
+import { EmailLink } from "@/components/platform/contact/ContactLink";
 
 interface HrTabsProps {
   view: string;
@@ -87,7 +88,9 @@ export function HrTabs({
             {substitutes.map((s) => (
               <li key={s.id as string} className="rounded-lg bg-slate-50 px-3 py-2">
                 <p className="font-medium">{s.substitute_name as string}</p>
-                <p className="text-slate-500">{s.contact_email as string ?? "—"}</p>
+                <p className="text-slate-500">
+                  <EmailLink email={s.contact_email as string | null} />
+                </p>
                 <p className="text-xs capitalize text-slate-500">
                   {s.credentials_verified ? "Credentials verified" : "Pending verification"} · {s.status as string}
                 </p>

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { inviteGuardiansAction } from "@/lib/portal/parent-invite-actions";
 import { ActionButton, useActionFeedback } from "@/components/experience-system/feedback";
 import { PARENT_INVITE_BATCH_LIMIT } from "@/lib/portal/parent-invite-limits";
+import { EmailLink } from "@/components/platform/contact/ContactLink";
 
 export type InviteRow = {
   guardianId: string;
@@ -119,7 +120,9 @@ export function ParentInviteList({
                   {row.firstName} {row.lastName}
                 </td>
                 <td className="px-3 py-2 text-slate-600">{row.familyName ?? "—"}</td>
-                <td className="px-3 py-2 text-slate-600">{row.email ?? "—"}</td>
+                <td className="px-3 py-2 text-slate-600">
+                  <EmailLink email={row.email} />
+                </td>
                 <td className="px-3 py-2 text-slate-500">
                   {row.skip ? SKIP_REASON[row.skip] : row.needsConfirmation ? "Details unconfirmed" : "Ready"}
                 </td>

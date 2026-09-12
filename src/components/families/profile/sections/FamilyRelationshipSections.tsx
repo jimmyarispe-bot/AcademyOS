@@ -14,6 +14,7 @@ import {
   latestEnrollment,
   missingSection,
 } from "@/components/families/profile/sections/shared";
+import { EmailLink } from "@/components/platform/contact/ContactLink";
 
 export function HouseholdSection(props: ProfileSectionViewProps) {
   const data = props.data as {
@@ -28,7 +29,7 @@ export function HouseholdSection(props: ProfileSectionViewProps) {
         <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <ProfileItem label="Family name" value={formatLabel(data.family.family_name)} />
           <ProfileItem label="Status" value={formatLabel(data.family.status)} />
-          <ProfileItem label="Billing email" value={formatLabel(data.family.billing_email)} />
+          <ProfileItem label="Billing email" value={<EmailLink email={data.family.billing_email as string | null} />} />
           <ProfileItem label="Address" value={formatLabel(data.family.primary_address)} />
           <ProfileItem
             label="City / State"

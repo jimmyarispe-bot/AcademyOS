@@ -13,6 +13,7 @@ import {
 } from "@/components/employees/profile/sections/shared";
 import type { ProfileSectionViewProps } from "@/lib/platform/profile/sections/types";
 import type { PlatformEntityTag } from "@/lib/platform/tags/types";
+import { EmailLink } from "@/components/platform/contact/ContactLink";
 
 type OverviewData = {
   employee: Record<string, unknown>;
@@ -46,7 +47,7 @@ export function OverviewSection(props: ProfileSectionViewProps) {
       <div className="grid gap-6 lg:grid-cols-2">
         <ProfileCard title="Contact & Emergency">
           <dl className="grid gap-3 sm:grid-cols-2">
-            <ProfileItem label="Email" value={formatLabel(ep?.contact_email)} />
+            <ProfileItem label="Email" value={<EmailLink email={ep?.contact_email as string | null} />} />
             <ProfileItem label="Job title" value={formatLabel(ep?.job_title)} />
             <ProfileItem label="School" value={employeeSchoolName(emp)} />
             <ProfileItem label="Emergency contact" value={formatLabel(ep?.emergency_contact_name)} />

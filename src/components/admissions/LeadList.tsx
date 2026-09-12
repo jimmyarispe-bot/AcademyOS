@@ -5,6 +5,7 @@ import { programLabel } from "@/lib/constants/programs";
 import { daysInCurrentStage, pipelineAgingClasses } from "@/lib/admissions/workflow";
 import { FundingSourceBadges } from "@/components/ui/FundingSourceBadges";
 import type { AdmissionLead } from "@/lib/admissions/queries";
+import { EmailLink } from "@/components/platform/contact/ContactLink";
 
 interface LeadListProps {
   leads: AdmissionLead[];
@@ -57,7 +58,9 @@ export function LeadList({ leads }: LeadListProps) {
                     {lead.first_name} {lead.last_name}
                   </Link>
                   {lead.guardian_email && (
-                    <p className="text-xs text-slate-500">{lead.guardian_email}</p>
+                    <p className="text-xs text-slate-500">
+                      <EmailLink email={lead.guardian_email} />
+                    </p>
                   )}
                 </td>
                 <td className="px-4 py-3">

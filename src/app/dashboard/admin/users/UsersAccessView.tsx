@@ -28,6 +28,7 @@ import {
   EntityActionMenu,
   type EntityMenuAction,
 } from "@/components/platform/crud/EntityActionMenu";
+import { EmailLink } from "@/components/platform/contact/ContactLink";
 
 type OrgOption = { id: string; name: string };
 type SchoolOption = { id: string; name: string };
@@ -474,7 +475,9 @@ export function UsersAccessView({
                       </div>
                     ) : null}
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{user.email}</td>
+                  <td className="px-4 py-3 text-slate-600">
+                    <EmailLink email={user.email} />
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
                       {user.roles.length
