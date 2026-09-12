@@ -6,6 +6,7 @@ import { submitInterestFormAction } from "@/lib/admissions/interest-form/actions
 import {
   isQuestionVisible,
   isSectionVisible,
+  pruneAnswersForHiddenSections,
   resolveStaticOptions,
 } from "@/lib/admissions/interest-form/definition";
 import {
@@ -40,6 +41,7 @@ function defaultValues(published: PublishedInterestForm): InterestFormValues {
   }
   return values;
 }
+
 
 
 function FileQuestion({
@@ -569,7 +571,12 @@ export function InterestFormRenderer({ published }: InterestFormRendererProps) {
   });
 
   function setField(key: string, next: unknown) {
-    setValues((prev) => ({ ...prev, [key]: next }));
+    setValues((prev) => {
+      const merged = { ...prev, [key]: next };
+      return key === "school_id"
+        ? pruneAnswersForHiddenSections(published.definition, merged)
+        : merged;
+    });
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {

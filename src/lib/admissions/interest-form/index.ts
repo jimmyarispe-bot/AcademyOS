@@ -23,6 +23,7 @@ export {
   isQuestionVisible,
   isSectionVisible,
   parseInterestFormDefinition,
+  pruneAnswersForHiddenSections,
   resolveStaticOptions,
   validateInterestFormDefinition,
   validateInterestSubmission,

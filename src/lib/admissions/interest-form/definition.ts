@@ -61,6 +61,53 @@ export function isQuestionVisible(
   return evaluateFormConditions(question.visibleWhen ?? undefined, values);
 }
 
+/**
+ * Forget the answers belonging to sections the family can no longer see.
+ *
+ * Campus sections are gated on `school_id`, so they close the moment the school
+ * selector changes. A section gated on an *answer* does not: "show the GA GOAL
+ * eligibility questions when GOAL is ticked" says nothing about which school
+ * this is, so a parent who looked at Georgia, ticked GOAL, then switched to the
+ * high school carried Georgia's income and eligibility questions with them —
+ * required, un-fillable, and at the bottom of the wrong form.
+ *
+ * Gating that one section on the campus as well fixes today's instance. This
+ * fixes the shape of it, for the next answer-gated section somebody adds.
+ *
+ * Nothing was ever saved to the wrong campus: `validateInterestSubmission`
+ * drops hidden answers before it validates. Keeping them in the browser only
+ * made the form show questions it was going to throw away.
+ *
+ * Repeated until stable, because hiding one section can hide another — clearing
+ * `ga_scholarships` is what closes the GOAL section, and that is only visible on
+ * the following pass. Three passes is deeper than any published definition
+ * nests; the loop stops as soon as a pass changes nothing.
+ */
+export function pruneAnswersForHiddenSections(
+  definition: InterestFormDefinition,
+  values: InterestFormValues
+): InterestFormValues {
+  let current = values;
+
+  for (let pass = 0; pass < 3; pass += 1) {
+    let next: InterestFormValues | null = null;
+
+    for (const section of definition.sections) {
+      if (isSectionVisible(section, current)) continue;
+      for (const key of section.questionKeys) {
+        if (!(key in current)) continue;
+        next ??= { ...current };
+        delete next[key];
+      }
+    }
+
+    if (!next) return current;
+    current = next;
+  }
+
+  return current;
+}
+
 export function resolveStaticOptions(
   question: InterestQuestionDefinition
 ): readonly InterestQuestionOption[] {

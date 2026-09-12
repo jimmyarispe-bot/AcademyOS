@@ -1,49 +1,17 @@
-Admissions: families can attach the documents the form asks for
+Admissions: Georgia's scholarship questions stay on Georgia's form
 
-The GA GOAL section NAMED its documents and offered nowhere to put them. That
-was honest about the constraint and useless to a parent, who read "you will be
-asked to provide proof of income" and reasonably looked for a button.
+The GA GOAL eligibility section was gated on the GOAL tick alone, with no
+mention of the campus. Ticking it and then changing the school selector left
+the tick in browser state, so the section stayed open — required uploads and
+all — at the bottom of the high school and virtual forms.
 
-A `file` field type, a public upload route, and the rows that say whose the
-documents are.
+Two guards, because neither alone is enough for the next answer-gated section
+somebody adds:
 
-WHY A ROUTE HANDLER, NOT A SERVER ACTION. Server actions cap bodies at 1MB. A
-photograph of an award letter taken on a phone is routinely three to five, so a
-server action would reject the most common case while passing every test with a
-small PDF.
+  v13 gates that section on the Georgia campus as well as the tick.
+  The renderer forgets answers belonging to sections that close when the
+  school changes, which is the general shape of the same bug.
 
-WHY NOT BROWSER-TO-STORAGE. That is what the parent portal does and it works
-there because the parent is signed in and row policies decide what they may
-write. On a public form there is no account, and handing an unauthenticated
-browser storage credentials is how a bucket becomes somebody else's file host.
-Content type against an allowlist, ten megabyte cap, rate limited by IP, and the
-path generated server-side — a filename from a browser is attacker-controlled
-and never becomes a path.
-
-THE PATH IS VALIDATED AGAIN ON SUBMIT. The answer to a file question is a
-storage path supplied by the client, so only paths shaped like the ones the
-upload route issues are accepted. Without that check a person could name any
-object in the bucket and have somebody else's document attached to their own
-inquiry. Seven tests, including traversal and a non-uuid name.
-
-Uploading happens on choose rather than on submit, so a parent learns their file
-is too large while looking at the field instead of after filling in everything
-else. A failed upload clears the stored path rather than leaving the previous
-one, which would say the new file was accepted when it was not.
-
-A SECOND SIGNATURE for GA GOAL: that the ticked eligibility criteria are true
-and the documents are genuine. The v10 taxpayer pledge is a different thing —
-that is about supporting the fund and every Georgia family signs it. This one
-attests to claims that decide whether a scholarship is awarded, and only the
-families making those claims see it.
-
-DEPENDS ON MIGRATION 326, WHICH IS STILL UNRUN. Each upload becomes a row in
-application_documents against the LEAD, since no application exists yet. 326
-adds lead_id and rewrites the staff read policy to resolve a school through the
-lead — without it those rows are invisible to every member of staff, which is an
-upload that succeeded, reported success, and was seen by nobody.
-
-Run 326, then ship, then run 337.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_014B9rkuWAq2petze3CoyFp6
+Nothing was ever saved to the wrong campus — the server drops hidden answers
+before validating. The damage was to the parent, shown a wall of irrelevant
+required questions they could not fill in and could not submit past.
