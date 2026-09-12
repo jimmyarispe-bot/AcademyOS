@@ -1,15 +1,27 @@
-Profile workspace: the section tabs wrap instead of scrolling
+Platform: clicking a link shows the same progress bar as pressing a button
 
-A horizontally scrolling tab strip hides the sections nobody has scrolled to,
-and there is no visual difference between "that is all of them" and "there are
-four more past the right edge". Staff found sections by already knowing they
-existed, which is not finding them.
+Pressing Save has driven the bar at the top of the page since the action system
+was built. Clicking a link drove nothing — and a link is the more common thing
+to press. The current page stays fully rendered and interactive while the next
+one is fetched, so a slow section looks exactly like a click that missed, and
+the reasonable response to a click that missed is to click again.
 
-The strip now wraps onto a second row, and the threshold for hiding sections
-behind "More" goes from twelve to twenty-four. Twelve was chosen when a
-thirteenth tab was genuinely invisible; now a thirteenth tab costs a row. The
-admissions case has fifteen sections, so three of them — including the Student
-Questionnaire — were living in a dropdown nobody opened.
+One listener at the document rather than per-link. The App Router has no
+router-events hook; useLinkStatus is the documented tool and reports on one
+Link from inside that link's own subtree, so using it would mean editing every
+link in the product and remembering to do so for every link anybody adds.
+Listening once covers every link that exists and every link that will exist,
+including plain anchors.
 
-The valve stays for a profile kind that grows an unreasonable number of
-sections, where four rows of tabs would be worse than a menu.
+The bar stops when the pathname OR the query string changes. The query string
+matters as much as the path — a case page moves between sections with
+?section=, so watching the path alone would leave the bar running forever on
+the screens people use most. A ten-second timeout covers clicks that
+legitimately go nowhere, because a bar that never stops is worse than no bar.
+
+The cursor goes to `progress` at the same time. The bar is a thin line at the
+top of a tall page; the cursor is where the person is already looking.
+
+Also in this ship: the profile section tabs wrap onto a second row instead of
+scrolling, and the threshold for hiding sections behind "More" goes from twelve
+to twenty-four.
