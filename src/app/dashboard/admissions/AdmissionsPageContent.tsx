@@ -44,19 +44,42 @@ export const ADMISSIONS_TABS = [
   { href: "/dashboard/admissions?view=reporting", label: "Reporting", value: "reporting" },
 ] as const;
 
-const SUB_NAV = [
+/**
+ * `anyOf` gates a destination on permission. Omitted means everyone with
+ * admissions access sees it.
+ *
+ * The three funding entries are money wearing an admissions badge. They sit
+ * under /dashboard/admissions in the routing tree, which meant the only thing
+ * in front of them was the layout's `admissions.view` — so a School Leader whose
+ * remit is admissions could open state funding, award amounts and
+ * reconciliation. The pages are guarded now, but a guard that fires on arrival
+ * still leaves the words "State Funding" sitting on her screen. Both have to go.
+ */
+const FUNDING_ANY_OF = [
+  "funding.view",
+  "funding.verify",
+  "finance.state_funding",
+  "finance.view",
+] as const;
+
+const SUB_NAV: Array<{ href: string; label: string; anyOf?: readonly string[] }> = [
   { href: "/dashboard/admissions/waiting", label: "Waiting on us" },
   { href: "/dashboard/admissions/automation", label: "Automation" },
   { href: "/dashboard/admissions/workflows", label: "Workflows" },
   { href: "/dashboard/admissions/communications", label: "Templates" },
-  { href: "/dashboard/admissions/state-funding", label: "State Funding" },
-  { href: "/dashboard/admissions/funding-programs", label: "Funding Programs" },
-  { href: "/dashboard/admissions/reconciliation", label: "Reconciliation" },
+  { href: "/dashboard/admissions/state-funding", label: "State Funding", anyOf: FUNDING_ANY_OF },
+  { href: "/dashboard/admissions/funding-programs", label: "Funding Programs", anyOf: FUNDING_ANY_OF },
+  { href: "/dashboard/admissions/reconciliation", label: "Reconciliation", anyOf: FUNDING_ANY_OF },
   { href: "/dashboard/admissions/checklist", label: "Checklist Settings" },
   { href: "/apply", label: "Parent Inquiry Form" },
   { href: "/dashboard/admissions/leads/new", label: "Add Lead" },
   { href: "/dashboard/admissions/import", label: "Bulk Import" },
 ];
+
+export function visibleSubNav(permissions: readonly string[]) {
+  const granted = new Set(permissions);
+  return SUB_NAV.filter((item) => !item.anyOf || item.anyOf.some((key) => granted.has(key)));
+}
 
 interface AdmissionsPageContentProps {
   searchParams: Promise<{ view?: string; work?: string; drill?: string }>;
@@ -79,12 +102,18 @@ interface AdmissionsPageContentProps {
  * `activeView` is "" on the work queue, which matches no tab, so nothing is
  * highlighted — correct, because the work queue is not one of these views.
  */
-function AdmissionsNavigation({ activeView }: { activeView: string }) {
+function AdmissionsNavigation({
+  activeView,
+  permissions,
+}: {
+  activeView: string;
+  permissions: readonly string[];
+}) {
   return (
     <div className="space-y-2">
       <ViewTabs tabs={[...ADMISSIONS_TABS]} activeView={activeView} />
       <nav className="flex flex-wrap gap-2">
-        {SUB_NAV.map((item) => (
+        {visibleSubNav(permissions).map((item) => (
           <Link
             key={item.href}
             href={item.href}
@@ -105,11 +134,15 @@ async function AdmissionsLegacyView({
   view: string;
   drill: string;
 }) {
-  const [leads, report, execMetrics, drillDown] = await Promise.all([
+  // `ctx` joins the wave rather than being awaited first: getIdentityContext is
+  // request-cached, so this costs nothing, and the sub-navigation needs the
+  // permission list to know whether to render the funding destinations.
+  const [leads, report, execMetrics, drillDown, ctx] = await Promise.all([
     getLeads(),
     getAdmissionsReporting(),
     view === "executive" ? getExecutiveAdmissionsMetrics() : Promise.resolve(null),
     view === "executive" ? getLeadsDrillDown(drill) : Promise.resolve([]),
+    getIdentityContext(),
   ]);
 
   return (
@@ -123,13 +156,16 @@ async function AdmissionsLegacyView({
           </Link>
         }
       />
-      <AdmissionsNavigation activeView={view} />
+      <AdmissionsNavigation activeView={view} permissions={ctx?.permissions ?? []} />
       {view === "executive" && execMetrics ? (
         <ExecutiveAdmissionsDashboard metrics={execMetrics} drillDown={drillDown} drillFilter={drill} />
       ) : view === "reporting" ? (
         <AdmissionsReporting report={report} />
       ) : view === "list" ? (
-        <LeadList leads={leads} />
+        <LeadList
+          leads={leads}
+          showFunding={FUNDING_ANY_OF.some((key) => ctx?.permissions.includes(key))}
+        />
       ) : view === "pipeline" ? (
         <AdmissionsPipelineBoard leads={leads} />
       ) : (
@@ -253,7 +289,7 @@ export async function AdmissionsPageContent({ searchParams }: AdmissionsPageCont
       {orgContext && <JagOrganizationContextBar org={orgContext} />}
       {/* The lead list, the pipeline board and every admissions sub-route, on
           the screen the sidebar actually opens. See AdmissionsNavigation. */}
-      <AdmissionsNavigation activeView="" />
+      <AdmissionsNavigation activeView="" permissions={ctx.permissions} />
       {/* The work panel shows what is in front of you today. It does not show
           the funnel, the conversion rates, or the families who have been
           waiting since February - those live one route away and nothing here

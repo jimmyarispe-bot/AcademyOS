@@ -5,11 +5,15 @@ import {
 import type { ProfileSectionViewProps } from "@/lib/platform/profile/sections/types";
 import { missing } from "./shared";
 import { EmailLink, PhoneLink } from "@/components/platform/contact/ContactLink";
+import { ProspectPortalInvitePanel } from "@/components/admissions/case/ProspectPortalInvitePanel";
+import type { ProspectInviteCandidate } from "@/lib/admissions/portal/prospect-invites";
 
 export function ProspectSection(props: ProfileSectionViewProps) {
   const data = props.data as {
     lead: Record<string, unknown>;
     guardians: Record<string, unknown>[];
+    inviteCandidates?: ProspectInviteCandidate[];
+    leadId?: string;
   } | null;
   if (!data) return missing("Prospective Family");
 
@@ -47,6 +51,12 @@ export function ProspectSection(props: ProfileSectionViewProps) {
           )}
         </div>
       </ProfileCard>
+      {data.leadId && (
+        <ProspectPortalInvitePanel
+          leadId={data.leadId}
+          candidates={data.inviteCandidates ?? []}
+        />
+      )}
       {data.guardians.length > 0 && (
         <ProfileCard title="Additional Guardians">
           <ul className="space-y-2 text-sm">

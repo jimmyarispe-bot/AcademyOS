@@ -9,9 +9,22 @@ import { EmailLink } from "@/components/platform/contact/ContactLink";
 
 interface LeadListProps {
   leads: AdmissionLead[];
+  /**
+   * Whether to show the Funding column.
+   *
+   * A lead's funding source is which scholarship or state programme the family
+   * intends to pay with. That is money, and a School Leader whose remit is
+   * admissions is not shown money — so the column is omitted rather than
+   * emptied. An empty column headed "Funding" tells the reader there is
+   * something here they are not being shown, which is its own disclosure.
+   *
+   * Defaults to false. A caller that has not thought about who is reading does
+   * not get to leak by omission.
+   */
+  showFunding?: boolean;
 }
 
-export function LeadList({ leads }: LeadListProps) {
+export function LeadList({ leads, showFunding = false }: LeadListProps) {
   if (leads.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-slate-500">
@@ -37,9 +50,11 @@ export function LeadList({ leads }: LeadListProps) {
             <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
               Program
             </th>
-            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Funding
-            </th>
+            {showFunding && (
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                Funding
+              </th>
+            )}
             <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
               Inquiry
             </th>
@@ -78,9 +93,11 @@ export function LeadList({ leads }: LeadListProps) {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-sm text-slate-600">{programLabel(lead.program)}</td>
-                <td className="px-4 py-3">
-                  <FundingSourceBadges codes={lead.funding_sources} />
-                </td>
+                {showFunding && (
+                  <td className="px-4 py-3">
+                    <FundingSourceBadges codes={lead.funding_sources} />
+                  </td>
+                )}
                 <td className="px-4 py-3 text-sm text-slate-500">{lead.inquiry_date}</td>
               </tr>
             );

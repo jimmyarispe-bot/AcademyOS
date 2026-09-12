@@ -25,6 +25,10 @@ interface FamiliesPageProps {
 
 export default async function FamiliesPage({ searchParams }: FamiliesPageProps) {
   const identity = await getIdentityContext();
+  /** Whether this reader is shown the billing panel. See its comment below. */
+  const canSeeFinance = ["finance.view", "FINANCE_ACCESS", "fi.view", "finance.executive"].some(
+    (key) => identity?.permissions.includes(key) ?? false
+  );
   if (!canViewFamilies(identity)) {
     redirect("/dashboard/students");
   }
@@ -50,7 +54,7 @@ export default async function FamiliesPage({ searchParams }: FamiliesPageProps) 
     <div className="mx-auto max-w-7xl space-y-6 p-6">
       <PageHeader
         title="Families"
-        subtitle="Households, guardians, siblings, billing, and communications"
+        subtitle="Households, guardians, siblings, and communications"
         actions={
           <div className="flex flex-wrap gap-2">
             <Link
@@ -68,12 +72,19 @@ export default async function FamiliesPage({ searchParams }: FamiliesPageProps) 
           </div>
         }
       />
-      <IntelligenceLink
-        title="Which families carry the revenue?"
-        description="Family Analytics reads billing and the QuickBooks books together — what each household is billed, what has arrived, and where the balances sit."
-        href="/dashboard/finance/intelligence?view=families"
-        linkLabel="Open Family Analytics"
-      />
+      {/* Money on a page that is not about money. Families is opened by anybody
+          with students.view or families.manage — which includes a School Leader
+          whose remit is admissions — and this panel told her what each household
+          is billed, what has arrived, and where the balances sit. It is shown
+          only to somebody who holds a finance permission now. */}
+      {canSeeFinance && (
+        <IntelligenceLink
+          title="Which families carry the revenue?"
+          description="Family Analytics reads billing and the QuickBooks books together — what each household is billed, what has arrived, and where the balances sit."
+          href="/dashboard/finance/intelligence?view=families"
+          linkLabel="Open Family Analytics"
+        />
+      )}
       <Suspense fallback={<p className="text-sm text-slate-500">Loading families…</p>}>
         <FamilyDashboard
           rows={result.rows}

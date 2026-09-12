@@ -6,6 +6,7 @@ import {
   resolvePipelineStageFromLeadStage,
 } from "@/lib/admissions/registry";
 import { getCaseDerivedRelationships, getCaseWorkflowState } from "@/lib/admissions/case/orchestration";
+import { listProspectInviteCandidates } from "@/lib/admissions/portal/prospect-invites";
 import { getEntityActivity } from "@/lib/platform/activity";
 import { getEntityNotes } from "@/lib/platform/notes";
 import { getRelationshipsFrom } from "@/lib/platform/relationships";
@@ -91,11 +92,15 @@ export const ADMISSIONS_CASE_PROFILE_SECTIONS: ProfileSectionDefinition[] = [
     loadData: async (supabase, envelope) => {
       const env = caseEnvelope(envelope);
       if (!env) return null;
-      const [lead, guardians] = await Promise.all([
+      const [lead, guardians, inviteCandidates] = await Promise.all([
         loadLeadRecord(supabase, env.leadId),
         supabase.from("admissions_lead_guardians").select("*").eq("lead_id", env.leadId),
+        // Who on this enquiry can be given portal access, and why anybody
+        // cannot. Loaded here rather than in the component because it checks
+        // `public.users` for existing accounts, which needs the service role.
+        listProspectInviteCandidates(env.leadId),
       ]);
-      return { lead, guardians: guardians.data ?? [] };
+      return { lead, guardians: guardians.data ?? [], inviteCandidates, leadId: env.leadId };
     },
   }),
   section({

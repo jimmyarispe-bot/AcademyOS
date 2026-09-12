@@ -81,15 +81,15 @@ export const DASHBOARD_MODULES: DashboardModule[] = [
     href: "/dashboard/families",
     sidebarLabel: "Families",
     pageTitle: "Family Management",
-    pageSubtitle: "Households, guardians, siblings, billing, and communications",
+    pageSubtitle: "Households, guardians, siblings, and communications",
     placeholderTitle: "Family Management",
     placeholderDescription:
-      "First-class family profiles connecting students, guardians, billing, and scholarships.",
+      "First-class family profiles connecting students, guardians and siblings. Billing lives in Finance, behind its own permission.",
     placeholderFeatures: [
       "Family dashboard with search and filters",
       "Multi-guardian household management",
       "Merge and split families with audit history",
-      "Billing and scholarship views by household",
+      "Household communications and contact history",
     ],
   },
   {
