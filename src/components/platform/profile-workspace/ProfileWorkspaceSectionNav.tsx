@@ -32,7 +32,15 @@ export function ProfileWorkspaceSectionNav({
 
   return (
     <nav className="space-y-3" aria-label="Profile sections">
-      <div className="flex gap-1 overflow-x-auto rounded-xl border border-slate-200/80 bg-slate-50 p-1">
+      {/* Wraps rather than scrolls.
+
+          A horizontally scrolling tab strip hides the sections nobody has
+          scrolled to, and there is no visual difference between "that is all of
+          them" and "there are four more past the right edge". Staff found
+          sections by knowing they existed, which is not finding them.
+
+          Wrapping costs a second row of vertical space and shows everything. */}
+      <div className="flex flex-wrap gap-1 rounded-xl border border-slate-200/80 bg-slate-50 p-1">
         {primary.map((section) => {
           const active = navigation.activeSection === section.key;
           return (

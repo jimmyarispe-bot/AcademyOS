@@ -19,7 +19,19 @@ import {
   resolveVisibleSections,
 } from "@/lib/platform/profile/access";
 
-const OVERFLOW_THRESHOLD = 12;
+/**
+ * When sections stop fitting on the tab strip and go behind "More".
+ *
+ * Twelve was chosen when the strip was a single scrolling row, where a
+ * thirteenth tab was genuinely invisible. The strip now wraps, so tabs past the
+ * twelfth cost a second row rather than disappearing — and a tab you can see is
+ * worth more than the row it occupies. The admissions case has fifteen
+ * sections; at twelve, three of them lived in a dropdown nobody opened.
+ *
+ * The valve is still here for a profile kind that grows an unreasonable number
+ * of sections, where three or four rows of tabs would be worse than a menu.
+ */
+const OVERFLOW_THRESHOLD = 24;
 
 export function buildProfileNavigation(
   envelope: ProfileEnvelopeBase,
