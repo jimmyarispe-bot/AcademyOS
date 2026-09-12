@@ -3,6 +3,7 @@ import type { ProfileSectionViewProps } from "@/lib/platform/profile/sections/ty
 
 import { OverviewSection } from "./OverviewSection";
 import { ProspectSection } from "./ProspectSection";
+import { StudentQuestionnaireSection } from "./StudentQuestionnaireSection";
 import { PipelineSection } from "./PipelineSection";
 import { ApplicationsSection } from "./ApplicationsSection";
 import { DocumentsSection } from "./DocumentsSection";
@@ -24,6 +25,16 @@ import { RelationshipsSection } from "./RelationshipsSection";
  * the client-reference proxy and throws "Attempted to call X() from the server
  * but X is on the client". Server-component sections were unaffected, which is
  * why only the client sections failed, and only in a production build.
+ *
+ * THE COST OF THAT IS THIS FILE. A section now has to be added in two places —
+ * the definition in `ADMISSIONS_CASE_PROFILE_SECTIONS`, and a case here — and
+ * doing only the first produces a tab that renders "Section module is not
+ * registered", which is a sentence no member of staff can act on. That is
+ * exactly how the Student Questionnaire shipped.
+ *
+ * `tests/unit/admissions/case-sections-registered.test.ts` now reads both lists
+ * and fails when they disagree, so the next person only has to be reminded
+ * once.
  */
 export function AdmissionsCaseSectionSwitch(props: ProfileSectionViewProps) {
   switch (props.sectionKey) {
@@ -31,6 +42,8 @@ export function AdmissionsCaseSectionSwitch(props: ProfileSectionViewProps) {
       return <OverviewSection {...props} />;
     case "prospect":
       return <ProspectSection {...props} />;
+    case "student_questionnaire":
+      return <StudentQuestionnaireSection {...props} />;
     case "pipeline":
       return <PipelineSection {...props} />;
     case "applications":

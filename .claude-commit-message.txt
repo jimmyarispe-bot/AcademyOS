@@ -1,15 +1,17 @@
-Admissions: campuses without a building stop offering tours
+Admissions: the Student Questionnaire panel actually renders
 
-The thank-you page told every family "schedule your tour or meeting". The high
-school and Virtual have no building to tour, and inviting somebody to walk
-around a school that does not exist is the kind of small wrongness a family
-notices and a school never hears about. They now offer to schedule a day and
-time to meet virtually.
+A case section lives in two places. The definition creates the tab and loads
+its data; a static switch decides what to draw — static rather than a registry
+lookup, because resolving a "use client" section through the runtime registry
+breaks the RSC client boundary in a production build.
 
-Driven by a column on the school, not a list of names in the code. The obvious
-shortcut works until somebody renames a campus in the admin screen, at which
-point the page silently starts offering tours again and nothing reports a
-problem. Whether a campus meets families in person is a fact about the campus.
+The Student Questionnaire was added to the definition and not the switch. The
+tab appeared, loaded its data, and rendered "Section module is not registered":
+a sentence no member of staff can act on, and one that reads as a broken
+feature rather than a missing line.
 
-Defaults to false — a school that has not said otherwise has a front door — so
-Florida and Georgia are unaffected.
+Adds the case, and a test that reads both lists and fails when they disagree —
+in either direction — so the next person is only reminded once.
+
+Also in this ship: version 16, which cuts Virtual's programme list to the one
+programme it runs.
